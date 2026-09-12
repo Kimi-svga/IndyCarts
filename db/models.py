@@ -21,6 +21,9 @@ class User(Base):
 
     balance: Mapped[int] = mapped_column(BigInteger, default=0)
 
+    daily_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_attempt_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
     rating_common: Mapped[int] = mapped_column(Integer, default=0)
     rating_rare: Mapped[int] = mapped_column(Integer, default=0)
     rating_epic: Mapped[int] = mapped_column(Integer, default=0)
@@ -75,6 +78,7 @@ class UserCard(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
     card_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("cards.id"), nullable=False, index=True)
+    is_iw: Mapped[bool] = mapped_column(Boolean, default=False)
 
     acquired_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     acquired_price: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
