@@ -8,7 +8,6 @@ from core.config import settings
 from core.constants import RESERVED_USERNAMES, USERNAME_PATTERN
 from db.session import AsyncSessionLocal
 from db.models import User
-import re
 
 router = Router()
 
@@ -19,13 +18,13 @@ async def cmd_start(message: Message):
 
     async with AsyncSessionLocal() as session:
         stmt = select(User).where(User.telegram_id == tg_id)
-        result = await session.execute(stmt)
-        user = result.scalar_one_or_none()
+        user = (await session.execute(stmt)).scalar_one_or_none()
 
     if user:
         await message.answer(
             f"🏁 С возвращением, <b>{user.username}</b>!\n\n"
-            f"💰 Баланс: {user.balance} монет",
+            f"💰 Баланс: {user.balance}\n"
+            f"🎴 Попытки: {user.daily_attempts}",
             reply_markup=get_main_menu(),
             parse_mode="HTML"
         )
@@ -49,15 +48,13 @@ async def handle_username(message: Message):
     username = message.text.strip()
     username_norm = username.lower()
 
-    # Проверка на резерв
     if username_norm in RESERVED_USERNAMES:
-        await message.answer("❌ Этот ник зарезервирован.")
+        await message.answer("❌ Ник зарезервирован.")
         return
 
     async with AsyncSessionLocal() as session:
         stmt = select(User).where(User.username_normalized == username_norm)
-        result = await session.execute(stmt)
-        if result.scalar_one_or_none():
+        if (await session.execute(stmt)).scalar_one_or_none():
             await message.answer("❌ Ник занят.")
             return
 
@@ -67,13 +64,15 @@ async def handle_username(message: Message):
             username_normalized=username_norm,
             first_name=message.from_user.first_name or "Игрок",
             balance=settings.DAILY_MONEY,
+            daily_attempts=settings.DAILY_ATTEMPTS,
         )
         session.add(user)
         await session.commit()
 
     await message.answer(
         f"✅ <b>@{username}</b>, ты в игре!\n\n"
-        f"💰 Стартовый бонус: {settings.DAILY_MONEY} монет",
+        f"💰 {settings.DAILY_MONEY} монет\n"
+        f"🎴 {settings.DAILY_ATTEMPTS} попытки на дроп",
         reply_markup=get_main_menu(),
         parse_mode="HTML"
     )
