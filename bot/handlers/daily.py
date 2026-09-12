@@ -15,27 +15,31 @@ router = Router()
 async def cb_daily(query: CallbackQuery):
     await query.answer()
     tg_id = query.from_user.id
+    today = date.today()
 
     async with AsyncSessionLocal() as session:
         stmt = select(User).where(User.telegram_id == tg_id)
-        result = await session.execute(stmt)
-        user = result.scalar_one_or_none()
-
+        user = (await session.execute(stmt)).scalar_one_or_none()
         if not user:
             await query.message.edit_text("❌ Сначала /start")
             return
 
-        today = date.today()
+        if user.last_attempt_date != today:
+            user.daily_attempts = settings.DAILY_ATTEMPTS
+            user.last_attempt_date = today
+
         stmt = select(DailyReward).where(
             DailyReward.user_id == user.id,
             DailyReward.reward_date == today
         )
-        result = await session.execute(stmt)
-        claimed = result.scalar_one_or_none()
+        claimed = (await session.execute(stmt)).scalar_one_or_none()
 
         if claimed:
+            await session.commit()
             await query.message.edit_text(
-                "🎁 <b>Ежедневка уже получена</b>\n\nВозвращайся завтра!",
+                "🎁 <b>Уже получено сегодня</b>\n\n"
+                f"🎴 Попытки: {user.daily_attempts}\n"
+                "Возвращайся завтра!",
                 reply_markup=get_back_menu(),
                 parse_mode="HTML"
             )
@@ -43,13 +47,15 @@ async def cb_daily(query: CallbackQuery):
 
         user.balance += settings.DAILY_MONEY
         user.daily_streak += 1
-        reward = DailyReward(
+        user.daily_attempts = settings.DAILY_ATTEMPTS
+        user.last_attempt_date = today
+
+        session.add(DailyReward(
             user_id=user.id,
             reward_date=today,
             money=settings.DAILY_MONEY,
             attempts=settings.DAILY_ATTEMPTS,
-        )
-        session.add(reward)
+        ))
         await session.commit()
 
     await query.message.edit_text(
@@ -59,4 +65,4 @@ async def cb_daily(query: CallbackQuery):
         f"🔥 Стрик: {user.daily_streak}",
         reply_markup=get_back_menu(),
         parse_mode="HTML"
-  ) 
+        ) 
