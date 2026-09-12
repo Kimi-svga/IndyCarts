@@ -1,5 +1,3 @@
-"""Indy Carts — точка входа."""
-
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
@@ -11,7 +9,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from core.config import settings
 from core.logger import setup_logger
 from db.session import init_db, close_db
-from bot.handlers import start, profile, cards, market, pvp, bank, rating, limited, promo, daily, admin
+from bot.handlers import start, profile, cards, daily, market, pvp, bank, rating, admin
 
 logger = setup_logger()
 
@@ -22,17 +20,14 @@ bot = Bot(
 )
 dp = Dispatcher(storage=storage)
 
-# Роутеры
 dp.include_router(start.router)
 dp.include_router(profile.router)
 dp.include_router(cards.router)
+dp.include_router(daily.router)
 dp.include_router(market.router)
 dp.include_router(pvp.router)
 dp.include_router(bank.router)
 dp.include_router(rating.router)
-dp.include_router(limited.router)
-dp.include_router(promo.router)
-dp.include_router(daily.router)
 dp.include_router(admin.router)
 
 
@@ -65,14 +60,12 @@ async def webhook(request: Request):
     secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
     if secret != settings.WEBHOOK_SECRET:
         return Response(status_code=403)
-
     try:
         data = await request.json()
         update = types.Update.model_validate(data, context={"bot": bot})
         await dp.feed_update(bot, update)
     except Exception as e:
         logger.error(f"❌ Ошибка update: {e}")
-
     return Response(status_code=200)
 
 
@@ -81,12 +74,7 @@ async def health():
     try:
         info = await bot.get_webhook_info()
         me = await bot.get_me()
-        return {
-            "status": "ok",
-            "bot": me.username,
-            "webhook": info.url,
-            "pending": info.pending_update_count,
-        }
+        return {"status": "ok", "bot": me.username, "webhook": info.url}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
