@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date 
 from sqlalchemy import (
     BigInteger, Boolean, Date, DateTime, ForeignKey,
     Integer, Numeric, String, Text, UniqueConstraint, func
@@ -23,27 +23,19 @@ class User(Base):
 
     daily_attempts: Mapped[int] = mapped_column(Integer, default=0)
     last_attempt_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-
-    rating_common: Mapped[int] = mapped_column(Integer, default=0)
-    rating_rare: Mapped[int] = mapped_column(Integer, default=0)
-    rating_epic: Mapped[int] = mapped_column(Integer, default=0)
-    rating_legendary: Mapped[int] = mapped_column(Integer, default=0)
-    rating_ultra: Mapped[int] = mapped_column(Integer, default=0)
-    rating_iw: Mapped[int] = mapped_column(Integer, default=0)
-    rating_season: Mapped[int] = mapped_column(Integer, default=0)
-    rating_total: Mapped[int] = mapped_column(Integer, default=0)
+    daily_streak: Mapped[int] = mapped_column(Integer, default=0)
+    last_daily_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     pvp_wins: Mapped[int] = mapped_column(Integer, default=0)
     pvp_losses: Mapped[int] = mapped_column(Integer, default=0)
 
-    daily_streak: Mapped[int] = mapped_column(Integer, default=0)
-    last_daily_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    loan_amount: Mapped[int] = mapped_column(BigInteger, default=0)
+    loan_due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
-    ban_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Card(Base):
@@ -52,7 +44,6 @@ class Card(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     rarity: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
-    is_iw: Mapped[bool] = mapped_column(Boolean, default=False)
     team: Mapped[str | None] = mapped_column(String(64), nullable=True)
     year: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
@@ -62,14 +53,10 @@ class Card(Base):
     ceiling_price: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
     image_file_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-
-    drop_weight: Mapped[int] = mapped_column(Integer, default=100)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
 
     created_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
 class UserCard(Base):
@@ -81,22 +68,21 @@ class UserCard(Base):
     is_iw: Mapped[bool] = mapped_column(Boolean, default=False)
 
     acquired_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    acquired_price: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-
-    is_listed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-    listed_price: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    acquired_price: Mapped[int | None] = mapped_column(BigInteger, nullable=True) #блять ебучие таблицы
 
 
-class Transaction(Base):
-    __tablename__ = "transactions"
+class PvpBattle(Base):
+    __tablename__ = "pvp_battles"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
-    type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    amount: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    card_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cards.id"), nullable=True)
-    balance_after: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+    challenger_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    opponent_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    challenger_roll: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    opponent_roll: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    winner_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class DailyReward(Base):
@@ -112,32 +98,25 @@ class DailyReward(Base):
     __table_args__ = (UniqueConstraint("user_id", "reward_date", name="uq_daily_user_date"),)
 
 
-class Loan(Base):
-    __tablename__ = "loans"
+class PromoCode(Base):
+    __tablename__ = "promocodes"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
-    amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    rate: Mapped[float] = mapped_column(Numeric(4, 2), nullable=False)
-    term_days: Mapped[int] = mapped_column(Integer, nullable=False)
-    total_due: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    paid: Mapped[int] = mapped_column(BigInteger, default=0)
-    status: Mapped[str] = mapped_column(String(16), default="active", index=True)
-    issued_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    due_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-
-class PvpBattle(Base):
-    __tablename__ = "pvp_battles"
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    challenger_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
-    opponent_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
-    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
-    challenger_roll: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    opponent_roll: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    winner_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
-    fee: Mapped[int] = mapped_column(BigInteger, default=10)
+    code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
+    reward_money: Mapped[int] = mapped_column(BigInteger, default=0)
+    reward_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    max_activations: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    activations: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PromoActivation(Base):
+    __tablename__ = "promo_activations"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    promo_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("promocodes.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    activated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("promo_id", "user_id", name="uq_promo_user"),)
