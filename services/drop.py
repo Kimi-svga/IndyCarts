@@ -26,10 +26,15 @@ async def get_random_card_by_rarity(session: AsyncSession, rarity: str) -> Card 
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def get_any_card(session: AsyncSession) -> Card | None:
+    stmt = select(Card).where(Card.is_active == True).order_by(func.random()).limit(1)
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
 async def drop_card(session: AsyncSession) -> tuple[Card | None, bool]:
     rarity = roll_rarity()
     is_iw = roll_iw()
     card = await get_random_card_by_rarity(session, rarity)
     if not card:
-        card = await get_random_card_by_rarity(session, "common")
-    return card, is_iw
+        card = await get_any_card(session)
+    return card, is_iw 
