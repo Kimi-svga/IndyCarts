@@ -1,6 +1,4 @@
-import logging
-import sys
-
+import logging, sys
 
 def setup_logger(name: str = "indycarts") -> logging.Logger:
     logging.basicConfig(
