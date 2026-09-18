@@ -1,3 +1,6 @@
+"""Константы игры."""
+
+# Редкости
 RARITY_BASIC = "basic"
 RARITY_RARE = "rare"
 RARITY_EPIC = "epic"
@@ -63,9 +66,15 @@ MERGE_RULES = {
     RARITY_LEGENDARY: {"result": RARITY_LIMITED, "chance": 0.2},
 }
 
+# Роли
+ROLE_OWNER = "owner"
+ROLE_ADMIN = "admin"
+ROLE_MODERATOR = "moderator"
+ROLE_USER = "user"
+
 RESERVED_USERNAMES = {
     "owner", "admin", "support", "mod", "staff", "system", "bot",
     "p49", "indycarts", "bank", "market", "auction", "help", "official",
 }
 
-USERNAME_PATTERN = r"^[A-Za-z][A-Za-z0-9_]{2,19}$"
+USERNAME_PATTERN = r"^[A-Za-z][A-Za-z0-9_]{2,19}$" 
