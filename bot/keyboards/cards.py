@@ -8,7 +8,7 @@ class CardsMenu(CallbackData, prefix="cards"):
     action: str
 
 
-class CardsFilter(CallbackData, prefix="filter"):
+class CardsFilter(CallbackData, prefix="cflt"):
     rarity: str
 
 
@@ -32,18 +32,18 @@ def get_filter_menu() -> InlineKeyboardMarkup:
     b.button(text="🔴 Limited", callback_data=CardsFilter(rarity="limited"))
     b.button(text="⭐ Season", callback_data=CardsFilter(rarity="season"))
     b.button(text="📊 Все", callback_data=CardsFilter(rarity="all"))
-    b.button(text="🔙 Назад", callback_data=CardsMenu(action="back"))
+    b.button(text="🔙 Назад", callback_data=CardsMenu(action="back_to_cards"))
     b.adjust(3, 3, 2, 1)
     return b.as_markup()
 
 
 def get_merge_menu() -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text="🔵 Basic ×3 → Rare", callback_data="merge_basic")
-    b.button(text="🟢 Rare ×3 → Epic", callback_data="merge_rare")
-    b.button(text="🟣 Epic ×3 → Mythic", callback_data="merge_epic")
-    b.button(text="🟠 Mythic ×3 → Legendary", callback_data="merge_mythic")
-    b.button(text="🟡 Legendary ×3 → Limited (20%)", callback_data="merge_legendary")
-    b.button(text="🔙 Назад", callback_data=CardsMenu(action="back"))
+    b.button(text="🔵 Basic ×3 → Rare", callback_data="mg_basic")
+    b.button(text="🟢 Rare ×3 → Epic", callback_data="mg_rare")
+    b.button(text="🟣 Epic ×3 → Mythic", callback_data="mg_epic")
+    b.button(text="🟠 Mythic ×3 → Legendary", callback_data="mg_mythic")
+    b.button(text="🟡 Legendary ×3 → Limited (20%)", callback_data="mg_legendary")
+    b.button(text="🔙 Назад", callback_data=CardsMenu(action="back_to_cards"))
     b.adjust(1)
     return b.as_markup() 
