@@ -5,6 +5,7 @@ from sqlalchemy import select
 from datetime import datetime, timedelta
 
 from bot.keyboards.main import MainMenu, get_back_menu
+from bot.utils.stable import safe_answer, safe_render
 from core.config import settings
 from db.session import AsyncSessionLocal
 from db.models import User
@@ -14,12 +15,13 @@ router = Router()
 
 @router.callback_query(MainMenu.filter(F.action == "bank"))
 async def cb_bank(query: CallbackQuery):
-    await query.answer()
+    await safe_answer(query)
     async with AsyncSessionLocal() as session:
         user = (await session.execute(select(User).where(User.telegram_id == query.from_user.id))).scalar_one_or_none()
         if not user:
-            await query.message.edit_text("❌ Сначала /start")
+            await safe_render(query, "❌ Сначала /start")
             return
+
         if user.loan_amount > 0:
             due = user.loan_due_at.strftime('%d.%m.%Y') if user.loan_due_at else "—"
             days_left = (user.loan_due_at - datetime.utcnow()).days if user.loan_due_at else 0
@@ -28,28 +30,31 @@ async def cb_bank(query: CallbackQuery):
                 warning = "\n⚠️ <b>ПРОСРОЧКА!</b> Банк забирает карты."
             elif days_left <= 3:
                 warning = f"\n⚠️ <b>Осталось {days_left} дней!</b>"
-            loan_info = f"\n💰 Долг: <b>{user.loan_amount}</b>\n📅 Вернуть до: {due}\n⏳ Осталось: {days_left} дней{warning}\n"
-            builder = InlineKeyboardBuilder()
-            builder.button(text="💸 Досрочно погасить", callback_data="repay_menu")
-            builder.button(text="🔙 Назад", callback_data=MainMenu(action="back"))
-            builder.adjust(1)
-            await query.message.edit_text(
-                f"🏦 <b>P4/9 Bank</b>\n\n💰 Ставка: {int(settings.BANK_RATE*100)}%\n📅 Срок: {settings.BANK_TERM_DAYS} дней\n💵 Макс: {settings.BANK_MAX_LOAN:,}\n{loan_info}\n<code>/repay сумма</code> — погасить",
-                reply_markup=builder.as_markup(),
-                parse_mode="HTML"
+
+            b = InlineKeyboardBuilder()
+            b.button(text="💸 Досрочно погасить", callback_data="repay_menu")
+            b.button(text="🔙 Назад", callback_data=MainMenu(action="back"))
+            b.adjust(1)
+            await safe_render(
+                query,
+                f"🏦 <b>P4/9 Bank</b>\n\n💰 Ставка: {int(settings.BANK_RATE*100)}%\n📅 Срок: {settings.BANK_TERM_DAYS} дней\n\n"
+                f"💰 Долг: <b>{user.loan_amount}</b>\n📅 До: {due}\n⏳ Осталось: {days_left} дней{warning}\n\n"
+                f"<code>/repay сумма</code>",
+                b.as_markup()
             )
         else:
-            await query.message.edit_text(
-                f"🏦 <b>P4/9 Bank</b>\n\n💰 Ставка: {int(settings.BANK_RATE*100)}%\n📅 Срок: {settings.BANK_TERM_DAYS} дней\n💵 Макс: {settings.BANK_MAX_LOAN:,}\n\n✅ Нет активных кредитов\n\n<code>/loan 5000</code> — взять кредит",
-                reply_markup=get_back_menu(),
-                parse_mode="HTML"
+            await safe_render(
+                query,
+                f"🏦 <b>P4/9 Bank</b>\n\n💰 Ставка: {int(settings.BANK_RATE*100)}%\n📅 Срок: {settings.BANK_TERM_DAYS} дней\n💵 Макс: {settings.BANK_MAX_LOAN:,}\n\n"
+                f"✅ Нет активных кредитов\n\n<code>/loan 5000</code> — взять",
+                get_back_menu()
             )
 
 
 @router.callback_query(F.data == "repay_menu")
 async def cb_repay_menu(query: CallbackQuery):
-    await query.answer()
-    await query.message.edit_text("💸 <b>Досрочное погашение</b>\n\nВведи сумму:\n<code>/repay 5000</code>", reply_markup=get_back_menu(), parse_mode="HTML")
+    await safe_answer(query)
+    await safe_render(query, "💸 <b>Досрочное погашение</b>\n\nВведи сумму:\n<code>/repay 5000</code>", get_back_menu())
 
 
 @router.message(F.text.startswith("/repay"))
@@ -63,6 +68,7 @@ async def cmd_repay(message: Message):
     except ValueError:
         await message.answer("❌ Сумма — число")
         return
+
     async with AsyncSessionLocal() as session:
         user = (await session.execute(select(User).where(User.telegram_id == message.from_user.id))).scalar_one_or_none()
         if not user or user.loan_amount <= 0:
@@ -99,6 +105,7 @@ async def cmd_loan(message: Message):
     if amount < 100 or amount > settings.BANK_MAX_LOAN:
         await message.answer(f"❌ Сумма от 100 до {settings.BANK_MAX_LOAN}")
         return
+
     async with AsyncSessionLocal() as session:
         user = (await session.execute(select(User).where(User.telegram_id == message.from_user.id))).scalar_one_or_none()
         if not user:
@@ -113,7 +120,9 @@ async def cmd_loan(message: Message):
         await session.commit()
         due = user.loan_due_at.strftime('%d.%m.%Y')
         total = user.loan_amount
+
     await message.answer(
-        f"✅ <b>Кредит выдан!</b>\n\n💰 Получено: {amount}\n📅 Вернуть до: {due}\n💵 К возврату: <b>{total}</b>\n\n⚠️ <b>Внимание!</b> Если не выплатишь вовремя:\n1. Банк заберёт твои карты\n2. Баланс уйдёт в минус\n3. PvP будет заблокирован",
+        f"✅ <b>Кредит выдан!</b>\n\n💰 Получено: {amount}\n📅 Вернуть до: {due}\n💵 К возврату: <b>{total}</b>\n\n"
+        f"⚠️ <b>Внимание!</b> Если не выплатишь:\n1. Банк заберёт карты\n2. Баланс уйдёт в минус\n3. PvP заблокируется",
         parse_mode="HTML"
-        ) 
+            ) 
