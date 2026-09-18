@@ -4,18 +4,22 @@ from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy import select
+
 from db.session import AsyncSessionLocal
 from db.models import User, PromoCode, PromoActivation
 
 router = Router()
 
+
 class PromoState(StatesGroup):
     waiting_for_code = State()
+
 
 @router.message(Command("promo"))
 async def cmd_promo(message: Message, state: FSMContext):
     await message.answer("🎁 Введи промокод:")
     await state.set_state(PromoState.waiting_for_code)
+
 
 @router.message(PromoState.waiting_for_code)
 async def check_promo(message: Message, state: FSMContext):
