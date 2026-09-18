@@ -26,7 +26,7 @@ class User(Base):
     pvp_losses: Mapped[int] = mapped_column(Integer, default=0)
     loan_amount: Mapped[int] = mapped_column(BigInteger, default=0)
     loan_due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    trust_score: Mapped[int] = mapped_column(Integer, default=0)  # ← доверие
+    trust_score: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -125,3 +125,12 @@ class Reward(Base):
     reward_value: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     card_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cards.id"), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class AdminRole(Base):
+    __tablename__ = "admin_roles"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="admin")
+    appointed_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    appointed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now()) 
