@@ -1,3 +1,5 @@
+"""Админ-панель."""
+
 from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
@@ -7,8 +9,16 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy import select, func
 import json
 import asyncio
+
+from bot.keyboards.main import MainMenu, get_back_menu, get_main_menu
+from bot.keyboards.admin import AdminMenu, get_admin_menu
+from bot.utils.stable import safe_answer, safe_render
+from bot.utils.decorators import require_admin
 from core.config import settings
-from core.constants import RARITIES, RARITY_NAMES, RARITY_EMOJI, FLOOR_MULTIPLIER, CEILING_MULTIPLIER
+from core.constants import (
+    RARITIES, RARITY_NAMES, RARITY_EMOJI,
+    FLOOR_MULTIPLIER, CEILING_MULTIPLIER
+)
 from db.session import AsyncSessionLocal
 from db.models import Card, User, PromoCode, Reward
 
@@ -34,29 +44,30 @@ class EditCard(StatesGroup):
     price = State(); weight = State(); supply = State(); image = State()
 
 
-def is_admin(uid: int) -> bool:
-    return uid in settings.ADMIN_IDS
-
+# ─── /admin ───
 
 @router.message(Command("admin"))
 async def cmd_admin(message: Message):
-    if not is_admin(message.from_user.id):
-        return
-    await message.answer(
-        "👑 <b>Панель P4/9</b>\n\n"
-        "/addcard — карта\n/importcards — массовая загрузка\n"
-        "/edit — редактор карт\n/addpromo — промокод\n"
-        "/setreward — награды топ\n/broadcast — рассылка\n/stats — статистика",
-        parse_mode="HTML"
-    )
+    if message.from_user.id not in settings.OWNER_IDS and message.from_user.id not in settings.ADMIN_IDS:
+        async with AsyncSessionLocal() as session:
+            from db.models import AdminRole
+            user = (await session.execute(select(User).where(User.telegram_id == message.from_user.id))).scalar_one_or_none()
+            if not user:
+                return
+            role = (await session.execute(select(AdminRole).where(AdminRole.user_id == user.id))).scalar_one_or_none()
+            if not role:
+                return
+
+    await message.answer("👑 <b>Панель P4/9</b>", reply_markup=get_admin_menu(), parse_mode="HTML")
 
 
-@router.message(Command("addcard"))
-async def cmd_addcard(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id):
-        return
+# ─── КОНСТРУКТОР КАРТ ───
+
+@router.callback_query(AdminMenu.filter(F.action == "add_card"))
+@require_admin
+async def cb_add_card(query: CallbackQuery, state: FSMContext):
     await state.set_state(AddCard.name)
-    await message.answer("➕ Шаг 1/8: Имя пилота")
+    await safe_render(query, "➕ <b>Новая карта</b>\n\nШаг 1/8: Имя пилота")
 
 
 @router.message(AddCard.name)
@@ -65,17 +76,17 @@ async def ac_name(message: Message, state: FSMContext):
     await state.set_state(AddCard.rarity)
     b = InlineKeyboardBuilder()
     for r in RARITIES:
-        b.button(text=RARITY_NAMES[r], callback_data=f"rarity_{r}")
+        b.button(text=RARITY_NAMES[r], callback_data=f"ar_{r}")
     b.adjust(2)
     await message.answer("Шаг 2/8: Редкость", reply_markup=b.as_markup())
 
 
-@router.callback_query(F.data.startswith("rarity_"))
+@router.callback_query(F.data.startswith("ar_"))
 async def ac_rarity(query: CallbackQuery, state: FSMContext):
-    rarity = query.data.replace("rarity_", "")
+    rarity = query.data.replace("ar_", "")
     await state.update_data(rarity=rarity)
     await state.set_state(AddCard.team)
-    await query.answer()
+    await safe_answer(query)
     await query.message.edit_text("Шаг 3/8: Команда")
 
 
@@ -170,16 +181,27 @@ async def ac_skip(message: Message, state: FSMContext):
     await message.answer(f"✅ Карта добавлена: {data['name']}")
 
 
+# ─── МАССОВАЯ ЗАГРУЗКА ───
+
+@router.callback_query(AdminMenu.filter(F.action == "edit_cards"))
+@require_admin
+async def cb_edit_cards(query: CallbackQuery, state: FSMContext):
+    await safe_answer(query)
+    await state.set_state(EditCard.choosing)
+    await query.message.delete()
+    await show_card_list(query.message, 0)
+
+
 @router.message(Command("importcards"))
 async def cmd_import(message: Message):
-    if not is_admin(message.from_user.id):
+    if message.from_user.id not in settings.OWNER_IDS and message.from_user.id not in settings.ADMIN_IDS:
         return
     await message.answer("📦 Отправь JSON-файл с картами")
 
 
 @router.message(F.document)
 async def handle_import(message: Message):
-    if not is_admin(message.from_user.id):
+    if message.from_user.id not in settings.OWNER_IDS and message.from_user.id not in settings.ADMIN_IDS:
         return
     if not message.document.file_name.endswith(".json"):
         return
@@ -205,12 +227,14 @@ async def handle_import(message: Message):
     await message.answer(f"✅ Загружено: {count} карт")
 
 
-@router.message(Command("addpromo"))
-async def cmd_addpromo(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id):
-        return
+# ─── ПРОМОКОДЫ ───
+
+@router.callback_query(AdminMenu.filter(F.action == "add_promo"))
+@require_admin
+async def cb_add_promo(query: CallbackQuery, state: FSMContext):
+    await safe_answer(query)
     await state.set_state(AddPromo.code)
-    await message.answer("🎁 Шаг 1/3: Код")
+    await safe_render(query, "🎁 Шаг 1/3: Код промокода", get_back_menu())
 
 
 @router.message(AddPromo.code)
@@ -247,49 +271,14 @@ async def ap_attempts(message: Message, state: FSMContext):
     await message.answer(f"✅ Промокод <code>{data['code']}</code> создан", parse_mode="HTML")
 
 
-@router.message(Command("setreward"))
-async def cmd_setreward(message: Message):
-    if not is_admin(message.from_user.id):
-        return
-    await message.answer(
-        "🏆 <b>Настройка награды</b>\n\n"
-        "Формат: <code>/setreward позиция тип значение</code>\n"
-        "Типы: money, card, attempts\n"
-        "Пример: <code>/setreward 1 money 10000</code>",
-        parse_mode="HTML"
-    )
+# ─── РАССЫЛКА ───
 
-
-@router.message(F.text.startswith("/setreward"))
-async def handle_setreward(message: Message):
-    if not is_admin(message.from_user.id):
-        return
-    parts = message.text.split()
-    if len(parts) < 4:
-        await message.answer("❌ Формат: /setreward позиция тип значение")
-        return
-    try:
-        position = int(parts[1])
-        rtype = parts[2]
-        value = int(parts[3])
-    except ValueError:
-        await message.answer("❌ Позиция и значение — числа")
-        return
-    async with AsyncSessionLocal() as session:
-        old = (await session.execute(select(Reward).where(Reward.position == position))).scalar_one_or_none()
-        if old:
-            await session.delete(old)
-        session.add(Reward(position=position, reward_type=rtype, reward_value=value))
-        await session.commit()
-    await message.answer(f"✅ Награда для топ-{position}: {rtype} = {value}", parse_mode="HTML")
-
-
-@router.message(Command("broadcast"))
-async def cmd_broadcast(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id):
-        return
+@router.callback_query(AdminMenu.filter(F.action == "broadcast"))
+@require_admin
+async def cb_broadcast(query: CallbackQuery, state: FSMContext):
+    await safe_answer(query)
     await state.set_state(Broadcast.text)
-    await message.answer("📨 Отправь текст для рассылки")
+    await safe_render(query, "📨 Отправь текст для рассылки", get_back_menu())
 
 
 @router.message(Broadcast.text)
@@ -309,65 +298,63 @@ async def do_broadcast(message: Message, state: FSMContext):
     await message.answer(f"✅ Отправлено: {count}")
 
 
-@router.message(Command("stats"))
-async def cmd_stats(message: Message):
-    if not is_admin(message.from_user.id):
-        return
+# ─── СТАТИСТИКА ───
+
+@router.callback_query(AdminMenu.filter(F.action == "stats"))
+@require_admin
+async def cb_stats(query: CallbackQuery):
+    await safe_answer(query)
     async with AsyncSessionLocal() as session:
         users = (await session.execute(select(func.count(User.id)))).scalar() or 0
         cards = (await session.execute(select(func.count(Card.id)))).scalar() or 0
-    await message.answer(f"📊 Игроков: {users}\n🃏 Карт: {cards}")
+    await safe_render(query, f"📊 Игроков: {users}\n🃏 Карт: {cards}", get_admin_menu())
 
 
-# ─── РЕДАКТОР КАРТ ───
+# ─── РЕДАКТОР ───
 
-@router.message(Command("edit"))
-async def cmd_edit(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id):
-        return
-    await state.set_state(EditCard.choosing)
-    await show_card_list(message, 0)
-
-
-async def show_card_list(message: Message, page: int):
+async def show_card_list(message, page: int):
     per_page = 10
     async with AsyncSessionLocal() as session:
         total = (await session.execute(select(func.count(Card.id)))).scalar() or 0
         cards = (await session.execute(
             select(Card).order_by(Card.id).offset(page * per_page).limit(per_page)
         )).scalars().all()
+
     if not cards:
         await message.answer("📭 Карт нет")
         return
-    text = f"✏️ <b>Редактор карт</b>\n\nВсего: {total}\nСтраница {page + 1}\n\n"
-    builder = InlineKeyboardBuilder()
+
+    text = f"✏️ <b>Редактор карт</b>\n\nВсего: {total}\nСтраница {page + 1}"
+    b = InlineKeyboardBuilder()
     for c in cards:
         emoji = RARITY_EMOJI.get(c.rarity, "⚪")
-        builder.button(text=f"{emoji} #{c.id} {c.name[:20]}", callback_data=f"edit_{c.id}")
-    builder.adjust(1)
+        b.button(text=f"{emoji} #{c.id} {c.name[:20]}", callback_data=f"ec_{c.id}")
+    b.adjust(1)
+
     nav = InlineKeyboardBuilder()
     if page > 0:
-        nav.button(text="⬅️ Назад", callback_data=f"editpage_{page - 1}")
+        nav.button(text="⬅️", callback_data=f"ep_{page - 1}")
     nav.button(text=f"{page + 1}", callback_data="noop")
     if (page + 1) * per_page < total:
-        nav.button(text="➡️ Далее", callback_data=f"editpage_{page + 1}")
+        nav.button(text="➡️", callback_data=f"ep_{page + 1}")
     nav.adjust(2, 1)
-    builder.attach(nav)
-    await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    b.attach(nav)
+
+    await message.answer(text, reply_markup=b.as_markup(), parse_mode="HTML")
 
 
-@router.callback_query(F.data.startswith("editpage_"))
-async def cb_edit_page(query: CallbackQuery, state: FSMContext):
-    await query.answer()
-    page = int(query.data.replace("editpage_", ""))
+@router.callback_query(F.data.startswith("ep_"))
+async def cb_edit_page(query: CallbackQuery):
+    await safe_answer(query)
+    page = int(query.data.replace("ep_", ""))
     await query.message.delete()
     await show_card_list(query.message, page)
 
 
-@router.callback_query(F.data.startswith("edit_") & ~F.data.startswith("editpage_"))
+@router.callback_query(F.data.startswith("ec_"))
 async def cb_edit_card(query: CallbackQuery, state: FSMContext):
-    await query.answer()
-    card_id = int(query.data.replace("edit_", ""))
+    await safe_answer(query)
+    card_id = int(query.data.replace("ec_", ""))
     await state.update_data(edit_card_id=card_id)
     await state.set_state(EditCard.editing)
     await show_card_editor(query, card_id)
@@ -377,131 +364,32 @@ async def show_card_editor(query: CallbackQuery, card_id: int):
     async with AsyncSessionLocal() as session:
         card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
         if not card:
-            await query.answer("❌ Карта не найдена", show_alert=True)
+            await safe_answer(query, "❌ Не найдено", show_alert=True)
             return
+
     emoji = RARITY_EMOJI.get(card.rarity, "⚪")
     text = (
-        f"✏️ <b>Редактор карты #{card.id}</b>\n\n"
+        f"✏️ <b>Карта #{card.id}</b>\n\n"
         f"Имя: <b>{card.name}</b>\nРедкость: {emoji} {RARITY_NAMES[card.rarity]}\n"
         f"Команда: {card.team or '—'}\nГод: {card.year or '—'}\n"
-        f"Цена: <b>{card.current_price}</b>\nБаза: {card.base_price}\n"
-        f"Вес: {card.drop_weight}\nТираж: {card.max_supply or '∞'} ({card.issued})\n"
-        f"Фото: {'✅' if card.image_file_id else '❌'}\n\nЧто редактируем?"
+        f"Цена: <b>{card.current_price}</b>\nВес: {card.drop_weight}\n"
+        f"Тираж: {card.max_supply or '∞'} ({card.issued})\n"
     )
-    builder = InlineKeyboardBuilder()
-    builder.button(text="📝 Имя", callback_data="editfield_name")
-    builder.button(text="🎨 Редкость", callback_data="editfield_rarity")
-    builder.button(text="🏁 Команда", callback_data="editfield_team")
-    builder.button(text="📅 Год", callback_data="editfield_year")
-    builder.button(text="💰 Цена", callback_data="editfield_price")
-    builder.button(text="⚖️ Вес", callback_data="editfield_weight")
-    builder.button(text="📜 Тираж", callback_data="editfield_supply")
-    builder.button(text="🖼 Фото", callback_data="editfield_image")
-    builder.button(text="🔙 К списку", callback_data="editpage_0")
-    builder.adjust(2, 2, 2, 2, 1)
-    try:
-        await query.message.delete()
-    except Exception:
-        pass
-    if card.image_file_id:
-        await query.message.answer_photo(card.image_file_id, caption=text, parse_mode="HTML", reply_markup=builder.as_markup())
-    else:
-        await query.message.answer(text, parse_mode="HTML", reply_markup=builder.as_markup())
+    b = InlineKeyboardBuilder()
+    b.button(text="💰 Цена", callback_data="ef_price")
+    b.button(text="⚖️ Вес", callback_data="ef_weight")
+    b.button(text="📜 Тираж", callback_data="ef_supply")
+    b.button(text="🖼 Фото", callback_data="ef_image")
+    b.button(text="🔙 Назад", callback_data="ep_0")
+    b.adjust(2, 2, 1)
+    await safe_render(query, text, b.as_markup(), photo_file_id=card.image_file_id)
 
 
-@router.callback_query(F.data.startswith("editfield_"))
-async def cb_edit_field(query: CallbackQuery, state: FSMContext):
-    await query.answer()
-    field = query.data.replace("editfield_", "")
-    data = await state.get_data()
-    card_id = data.get("edit_card_id")
-    if field == "name":
-        await state.set_state(EditCard.name)
-        await query.message.edit_text(f"📝 Введи новое имя для карты #{card_id}:")
-    elif field == "rarity":
-        await state.set_state(EditCard.rarity)
-        b = InlineKeyboardBuilder()
-        for r in RARITIES:
-            b.button(text=RARITY_NAMES[r], callback_data=f"editrarity_{r}")
-        b.adjust(2)
-        await query.message.edit_text("🎨 Выбери новую редкость:", reply_markup=b.as_markup())
-    elif field == "team":
-        await state.set_state(EditCard.team)
-        await query.message.edit_text("🏁 Введи новую команду:")
-    elif field == "year":
-        await state.set_state(EditCard.year)
-        await query.message.edit_text("📅 Введи новый год:")
-    elif field == "price":
-        await state.set_state(EditCard.price)
-        await query.message.edit_text("💰 Введи новую цену:")
-    elif field == "weight":
-        await state.set_state(EditCard.weight)
-        await query.message.edit_text("⚖️ Введи новый вес дропа:")
-    elif field == "supply":
-        await state.set_state(EditCard.supply)
-        await query.message.edit_text("📜 Введи новый лимит (0 = без лимита):")
-    elif field == "image":
-        await state.set_state(EditCard.image)
-        await query.message.edit_text("🖼 Отправь новое фото или <code>skip</code>", parse_mode="HTML")
-
-
-@router.message(EditCard.name)
-async def ef_name(message: Message, state: FSMContext):
-    data = await state.get_data()
-    card_id = data["edit_card_id"]
-    async with AsyncSessionLocal() as session:
-        card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
-        if card:
-            card.name = message.text.strip()
-            await session.commit()
-    await state.set_state(EditCard.editing)
-    await message.answer("✅ Имя обновлено!")
-
-
-@router.callback_query(F.data.startswith("editrarity_"))
-async def ef_rarity(query: CallbackQuery, state: FSMContext):
-    rarity = query.data.replace("editrarity_", "")
-    data = await state.get_data()
-    card_id = data["edit_card_id"]
-    async with AsyncSessionLocal() as session:
-        card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
-        if card:
-            card.rarity = rarity
-            await session.commit()
-    await query.answer("✅ Редкость обновлена")
-    await state.set_state(EditCard.editing)
-    await show_card_editor(query, card_id)
-
-
-@router.message(EditCard.team)
-async def ef_team(message: Message, state: FSMContext):
-    data = await state.get_data()
-    card_id = data["edit_card_id"]
-    async with AsyncSessionLocal() as session:
-        card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
-        if card:
-            card.team = message.text.strip()
-            await session.commit()
-    await state.set_state(EditCard.editing)
-    await message.answer("✅ Команда обновлена!")
-
-
-@router.message(EditCard.year)
-async def ef_year(message: Message, state: FSMContext):
-    try:
-        year = int(message.text.strip())
-    except ValueError:
-        await message.answer("❌ Год — число")
-        return
-    data = await state.get_data()
-    card_id = data["edit_card_id"]
-    async with AsyncSessionLocal() as session:
-        card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
-        if card:
-            card.year = year
-            await session.commit()
-    await state.set_state(EditCard.editing)
-    await message.answer("✅ Год обновлён!")
+@router.callback_query(F.data == "ef_price")
+async def ef_price_start(query: CallbackQuery, state: FSMContext):
+    await safe_answer(query)
+    await state.set_state(EditCard.price)
+    await safe_render(query, "💰 Введи новую цену:", get_back_menu())
 
 
 @router.message(EditCard.price)
@@ -509,7 +397,7 @@ async def ef_price(message: Message, state: FSMContext):
     try:
         price = int(message.text.strip())
     except ValueError:
-        await message.answer("❌ Цена — число")
+        await message.answer("❌ Число")
         return
     data = await state.get_data()
     card_id = data["edit_card_id"]
@@ -525,12 +413,19 @@ async def ef_price(message: Message, state: FSMContext):
     await message.answer("✅ Цена обновлена!")
 
 
+@router.callback_query(F.data == "ef_weight")
+async def ef_weight_start(query: CallbackQuery, state: FSMContext):
+    await safe_answer(query)
+    await state.set_state(EditCard.weight)
+    await safe_render(query, "⚖️ Введи новый вес:", get_back_menu())
+
+
 @router.message(EditCard.weight)
 async def ef_weight(message: Message, state: FSMContext):
     try:
         weight = int(message.text.strip())
     except ValueError:
-        await message.answer("❌ Вес — число")
+        await message.answer("❌ Число")
         return
     data = await state.get_data()
     card_id = data["edit_card_id"]
@@ -541,6 +436,13 @@ async def ef_weight(message: Message, state: FSMContext):
             await session.commit()
     await state.set_state(EditCard.editing)
     await message.answer("✅ Вес обновлён!")
+
+
+@router.callback_query(F.data == "ef_supply")
+async def ef_supply_start(query: CallbackQuery, state: FSMContext):
+    await safe_answer(query)
+    await state.set_state(EditCard.supply)
+    await safe_render(query, "📜 Введи новый лимит (0 = без лимита):", get_back_menu())
 
 
 @router.message(EditCard.supply)
@@ -559,6 +461,13 @@ async def ef_supply(message: Message, state: FSMContext):
             await session.commit()
     await state.set_state(EditCard.editing)
     await message.answer("✅ Тираж обновлён!")
+
+
+@router.callback_query(F.data == "ef_image")
+async def ef_image_start(query: CallbackQuery, state: FSMContext):
+    await safe_answer(query)
+    await state.set_state(EditCard.image)
+    await safe_render(query, "🖼 Отправь фото или <code>skip</code>", get_back_menu())
 
 
 @router.message(EditCard.image, F.photo)
@@ -585,4 +494,44 @@ async def ef_image_skip(message: Message, state: FSMContext):
             card.image_file_id = None
             await session.commit()
     await state.set_state(EditCard.editing)
-    await message.answer("✅ Фото удалено!") 
+    await message.answer("✅ Фото удалено!")
+
+
+# ─── НАГРАДЫ ───
+
+@router.callback_query(AdminMenu.filter(F.action == "rewards"))
+@require_admin
+async def cb_rewards(query: CallbackQuery):
+    await safe_answer(query)
+    await safe_render(
+        query,
+        "🏆 <b>Награды топ-5</b>\n\nНастрой через команду:\n"
+        "<code>/setreward позиция тип значение</code>\n\n"
+        "Типы: money, attempts, card\n"
+        "Пример: <code>/setreward 1 money 10000</code>",
+        get_admin_menu()
+    )
+
+
+@router.message(Command("setreward"))
+async def cmd_setreward(message: Message):
+    if message.from_user.id not in settings.OWNER_IDS and message.from_user.id not in settings.ADMIN_IDS:
+        return
+    parts = message.text.split()
+    if len(parts) < 4:
+        await message.answer("Формат: <code>/setreward позиция тип значение</code>", parse_mode="HTML")
+        return
+    try:
+        position = int(parts[1])
+        rtype = parts[2]
+        value = int(parts[3])
+    except ValueError:
+        await message.answer("❌ Позиция и значение — числа")
+        return
+    async with AsyncSessionLocal() as session:
+        old = (await session.execute(select(Reward).where(Reward.position == position))).scalar_one_or_none()
+        if old:
+            await session.delete(old)
+        session.add(Reward(position=position, reward_type=rtype, reward_value=value))
+        await session.commit()
+    await message.answer(f"✅ Награда для топ-{position}: {rtype} = {value}")
