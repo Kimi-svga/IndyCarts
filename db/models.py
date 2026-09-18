@@ -5,8 +5,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+
 class Base(DeclarativeBase):
     pass
+
 
 class User(Base):
     __tablename__ = "users"
@@ -24,9 +26,11 @@ class User(Base):
     pvp_losses: Mapped[int] = mapped_column(Integer, default=0)
     loan_amount: Mapped[int] = mapped_column(BigInteger, default=0)
     loan_due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    trust_score: Mapped[int] = mapped_column(Integer, default=0)  # ← доверие
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
+
 
 class Card(Base):
     __tablename__ = "cards"
@@ -42,9 +46,12 @@ class Card(Base):
     ceiling_price: Mapped[int] = mapped_column(BigInteger, nullable=False)
     image_file_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
     drop_weight: Mapped[int] = mapped_column(Integer, default=100)
+    max_supply: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    issued: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     created_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
 
 class UserCard(Base):
     __tablename__ = "user_cards"
@@ -52,8 +59,18 @@ class UserCard(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     card_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("cards.id", ondelete="CASCADE"), nullable=False, index=True)
     is_iw: Mapped[bool] = mapped_column(Boolean, default=False)
+    serial_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     acquired_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     acquired_price: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+
+class PriceHistory(Base):
+    __tablename__ = "price_history"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    card_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("cards.id", ondelete="CASCADE"), nullable=False, index=True)
+    price: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+
 
 class PvpBattle(Base):
     __tablename__ = "pvp_battles"
@@ -67,6 +84,7 @@ class PvpBattle(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+
 class DailyReward(Base):
     __tablename__ = "daily_rewards"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -76,6 +94,7 @@ class DailyReward(Base):
     attempts: Mapped[int] = mapped_column(Integer, default=2)
     claimed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     __table_args__ = (UniqueConstraint("user_id", "reward_date", name="uq_daily_user_date"),)
+
 
 class PromoCode(Base):
     __tablename__ = "promocodes"
@@ -88,10 +107,21 @@ class PromoCode(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
+
 class PromoActivation(Base):
     __tablename__ = "promo_activations"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     promo_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("promocodes.id", ondelete="CASCADE"), nullable=False)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     activated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    __table_args__ = (UniqueConstraint("promo_id", "user_id", name="uq_promo_user"),) 
+    __table_args__ = (UniqueConstraint("promo_id", "user_id", name="uq_promo_user"),)
+
+
+class Reward(Base):
+    __tablename__ = "rewards"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    position: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    reward_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    reward_value: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    card_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cards.id"), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
