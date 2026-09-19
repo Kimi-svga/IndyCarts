@@ -35,6 +35,7 @@ class User(Base):
 
     pvp_wins: Mapped[int] = mapped_column(Integer, default=0)
     pvp_losses: Mapped[int] = mapped_column(Integer, default=0)
+    pvp_rating: Mapped[int] = mapped_column(Integer, default=1000, index=True)
 
     loan_amount: Mapped[int] = mapped_column(BigInteger, default=0)
     loan_due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -90,7 +91,7 @@ class UserCard(Base):
 
 
 class PriceHistory(Base):
-    """История цен (для индекса)."""
+    """История цен."""
     __tablename__ = "price_history"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -156,7 +157,7 @@ class PromoActivation(Base):
 
 
 class Reward(Base):
-    """Награда за топ."""
+    """Награда за топ по балансу."""
     __tablename__ = "rewards"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -164,6 +165,18 @@ class Reward(Base):
     reward_type: Mapped[str] = mapped_column(String(32), nullable=False)
     reward_value: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     card_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cards.id"), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class PvpReward(Base):
+    """Награда за топ PvP."""
+    __tablename__ = "pvp_rewards"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    position: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    reward_money: Mapped[int] = mapped_column(BigInteger, default=0)
+    reward_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    reward_card_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cards.id"), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
