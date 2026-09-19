@@ -34,7 +34,7 @@ for r in (start, profile, cards, daily, market, pvp, bank, rating, promo, admin,
 
 
 async def save_prices_task() -> None:
-    """Каждый час пишет текущие цены в price_history."""
+    """Каждый час пишет цены в price_history."""
     from sqlalchemy import select
     from db.models import Card, PriceHistory
 
@@ -52,7 +52,7 @@ async def save_prices_task() -> None:
 
 
 async def market_task() -> None:
-    """Каждые 10 минут затухание цен к базовым."""
+    """Каждые 10 минут затухание цен."""
     from sqlalchemy import select
     from db.models import Card
     from services.economy import Economy
@@ -73,7 +73,7 @@ async def market_task() -> None:
 
 
 async def loan_check_task() -> None:
-    """Каждый час проверяет просроченные кредиты."""
+    """Каждый час проверяет просрочку кредитов."""
     from sqlalchemy import select
     from db.models import User, UserCard
 
@@ -87,14 +87,12 @@ async def loan_check_task() -> None:
                 )).scalars().all()
 
                 for u in users:
-                    # Забираем до 3 карт
                     cards_list = (await session.execute(
                         select(UserCard).where(UserCard.user_id == u.id).limit(3)
                     )).scalars().all()
                     for c in cards_list:
                         await session.delete(c)
 
-                    # Списываем баланс
                     if u.balance >= u.loan_amount:
                         u.balance -= u.loan_amount
                     else:
@@ -119,15 +117,75 @@ async def loan_check_task() -> None:
             logger.error(f"Кредиты: {e}")
 
 
+async def pvp_rewards_task() -> None:
+    """Выдаёт награды топ-10 PvP 1-го числа в 00:00."""
+    from sqlalchemy import select
+    from db.models import PvpReward, User, UserCard
+
+    while True:
+        await asyncio.sleep(3600)
+        now = datetime.utcnow()
+
+        if now.day != 1 or now.hour != 0:
+            continue
+
+        try:
+            async with AsyncSessionLocal() as session:
+                top = (await session.execute(
+                    select(User).order_by(User.pvp_rating.desc()).limit(10)
+                )).scalars().all()
+
+                rewards = (await session.execute(
+                    select(PvpReward).where(PvpReward.is_active == True)
+                )).scalars().all()
+
+                reward_map = {r.position: r for r in rewards}
+
+                for i, user in enumerate(top, 1):
+                    r = reward_map.get(i)
+                    if r is None:
+                        continue
+
+                    user.balance += r.reward_money or 0
+                    user.daily_attempts += r.reward_attempts or 0
+
+                    card_text = ""
+                    if r.reward_card_id:
+                        session.add(UserCard(
+                            user_id=user.id,
+                            card_id=r.reward_card_id,
+                            acquired_price=0,
+                        ))
+                        card_text = "\n🎴 + кастомная карта"
+
+                    try:
+                        await bot.send_message(
+                            user.telegram_id,
+                            f"🏆 <b>Ты в топ-{i} PvP!</b>\n\n"
+                            f"💰 +{r.reward_money} монет\n"
+                            f"🎴 +{r.reward_attempts} попыток"
+                            f"{card_text}",
+                            parse_mode="HTML",
+                        )
+                    except Exception:
+                        pass
+
+                await session.commit()
+                logger.info("🏆 PvP-награды выданы топ-10")
+        except Exception as e:
+            logger.error(f"PvP-награды: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Запуск и остановка приложения."""
+    """Запуск и остановка."""
     logger.info("🚀 Запуск Indy Carts v0.6.1...")
 
     await init_db()
     asyncio.create_task(save_prices_task())
     asyncio.create_task(market_task())
     asyncio.create_task(loan_check_task())
+    asyncio.create_task(pvp_rewards_task())
 
     webhook_url = f"{settings.WEBHOOK_URL}/webhook"
     await bot.set_webhook(
@@ -150,7 +208,7 @@ app = FastAPI(title="Indy Carts", version="0.6.1", lifespan=lifespan)
 
 @app.post("/webhook")
 async def webhook(request: Request) -> Response:
-    """Обработка вебхука от Telegram."""
+    """Обработка вебхука."""
     if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != settings.WEBHOOK_SECRET:
         return Response(status_code=403)
 
@@ -166,7 +224,7 @@ async def webhook(request: Request) -> Response:
 
 @app.get("/health")
 async def health() -> dict:
-    """Health check для пингера Render."""
+    """Health check."""
     try:
         info = await bot.get_webhook_info()
         me = await bot.get_me()
