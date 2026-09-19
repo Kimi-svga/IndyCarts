@@ -20,13 +20,14 @@ async def safe_render(
     markup: InlineKeyboardMarkup | None = None,
     photo_file_id: str | None = None,
 ) -> None:
-    """Надёжно отображает: edit если текст, delete+send если фото или edit упал."""
+    """Надёжно отображает сообщение. Не падает на 'message is not modified'."""
     if not photo_file_id:
         try:
             await query.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
             return
-        except Exception:
-            pass
+        except Exception as e:
+            if "not modified" in str(e).lower():
+                return
 
     try:
         await query.message.delete()
@@ -47,4 +48,4 @@ async def safe_send(bot, chat_id: int, text: str, markup: InlineKeyboardMarkup |
     try:
         await bot.send_message(chat_id, text, reply_markup=markup, parse_mode="HTML")
     except Exception:
-        pass 
+        pass
