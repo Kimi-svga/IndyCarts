@@ -81,4 +81,4 @@ async def cb_shop_buy(query: CallbackQuery, callback_data: ShopMenu) -> None:
         f"Осталось: <b>{balance}</b> монет\n"
         f"Попыток: <b>{total_attempts}</b>",
         get_shop_menu(),
-) a
+    )
