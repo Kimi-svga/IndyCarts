@@ -19,6 +19,7 @@ from core.config import settings
 from core.constants import CEILING_MULTIPLIER, FLOOR_MULTIPLIER, RARITIES, RARITY_EMOJI, RARITY_NAMES
 from db.models import Card, PromoCode, Reward, User
 from db.session import AsyncSessionLocal
+from db.models import PvpReward 
 
 router = Router()
 
@@ -732,3 +733,56 @@ async def cmd_setreward(message: Message) -> None:
         await session.commit()
 
     await message.answer(f"✅ Награда для топ-{position}: {rtype} = {value}")
+
+
+@router.message(Command("setpvpreward"))
+async def cmd_setpvpreward(message: Message) -> None:
+    """
+    Устанавливает награду за топ PvP.
+
+    Формат: /setpvpreward позиция деньги попытки [ID карты]
+    """
+    if message.from_user.id not in settings.OWNER_IDS:
+        return
+
+    parts = message.text.split()
+    if len(parts) < 4:
+        await message.answer(
+            "Формат: <code>/setpvpreward позиция деньги попытки [ID карты]</code>\n\n"
+            "Пример: <code>/setpvpreward 1 50000 50 42</code>\n"
+            "Без карты: <code>/setpvpreward 5 10000 10</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    try:
+        position = int(parts[1])
+        money = int(parts[2])
+        attempts = int(parts[3])
+        card_id = int(parts[4]) if len(parts) > 4 else None
+    except ValueError:
+        await message.answer("❌ Позиция, деньги, попытки и карта — числа")
+        return
+
+    async with AsyncSessionLocal() as session:
+        old = (await session.execute(
+            select(PvpReward).where(PvpReward.position == position)
+        )).scalar_one_or_none()
+
+        if old is not None:
+            await session.delete(old)
+
+        session.add(PvpReward(
+            position=position,
+            reward_money=money,
+            reward_attempts=attempts,
+            reward_card_id=card_id,
+        ))
+        await session.commit()
+
+    card_text = f"\n🎴 Карта #{card_id}" if card_id else ""
+    await message.answer(
+        f"✅ PvP-награда для топ-{position}:\n"
+        f"💰 {money} монет\n"
+        f"🎴 {attempts} попыток{card_text}"
+)
