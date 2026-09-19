@@ -1,16 +1,19 @@
-"""Клавиатуры админ-панели."""
+"""Клавиатура админ-панели."""
 
 from aiogram.filters.callback_data import CallbackData
-from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
 from bot.keyboards.main import MainMenu
 
 
 class AdminMenu(CallbackData, prefix="admin"):
+    """Меню админа."""
     action: str
 
 
 def get_admin_menu() -> InlineKeyboardMarkup:
+    """Админ-меню."""
     b = InlineKeyboardBuilder()
     b.button(text="🃏 Добавить карту", callback_data=AdminMenu(action="add_card"))
     b.button(text="✏️ Редактор карт", callback_data=AdminMenu(action="edit_cards"))
