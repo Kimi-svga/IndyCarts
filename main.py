@@ -1,31 +1,43 @@
-from contextlib import asynccontextmanager
+"""Точка входа. FastAPI + aiogram webhook + крон."""
+
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime
-from fastapi import FastAPI, Request, Response
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.callback_answer import CallbackAnswerMiddleware
+from fastapi import FastAPI, Request, Response
 
+from bot.handlers import (
+    admin, bank, cards, daily, market, profile,
+    promo, pvp, rating, roles, shop, start,
+)
 from core.config import settings
 from core.logger import setup_logger
-from db.session import init_db, close_db, AsyncSessionLocal
-from bot.handlers import start, profile, cards, daily, market, pvp, bank, rating, promo, admin, roles
+from db.session import AsyncSessionLocal, close_db, init_db
 
 logger = setup_logger()
+
 storage = MemoryStorage()
-bot = Bot(token=settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+bot = Bot(
+    token=settings.BOT_TOKEN,
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+)
 dp = Dispatcher(storage=storage)
 dp.callback_query.middleware(CallbackAnswerMiddleware())
 
-for r in [start, profile, cards, daily, market, pvp, bank, rating, promo, admin, roles]:
+for r in (start, profile, cards, daily, market, pvp, bank, rating, promo, admin, roles, shop):
     dp.include_router(r.router)
 
 
-async def save_prices_task():
+async def save_prices_task() -> None:
+    """Каждый час пишет текущие цены в price_history."""
     from sqlalchemy import select
     from db.models import Card, PriceHistory
+
     while True:
         await asyncio.sleep(3600)
         try:
@@ -39,10 +51,12 @@ async def save_prices_task():
             logger.error(f"История: {e}")
 
 
-async def market_task():
+async def market_task() -> None:
+    """Каждые 10 минут затухание цен к базовым."""
     from sqlalchemy import select
     from db.models import Card
-    from services.economy import decay_price
+    from services.economy import Economy
+
     while True:
         await asyncio.sleep(600)
         try:
@@ -51,16 +65,18 @@ async def market_task():
                     select(Card).where(Card.current_price != Card.base_price)
                 )).scalars().all()
                 for c in cards_list:
-                    c.current_price = decay_price(c.current_price, c.base_price)
+                    c.current_price = Economy.decay_price(c.current_price, c.base_price)
                 await session.commit()
                 logger.info(f"⏰ Затухание: {len(cards_list)}")
         except Exception as e:
             logger.error(f"Затухание: {e}")
 
 
-async def loan_check_task():
+async def loan_check_task() -> None:
+    """Каждый час проверяет просроченные кредиты."""
     from sqlalchemy import select
     from db.models import User, UserCard
+
     while True:
         await asyncio.sleep(3600)
         try:
@@ -69,27 +85,34 @@ async def loan_check_task():
                 users = (await session.execute(
                     select(User).where(User.loan_amount > 0, User.loan_due_at < now)
                 )).scalars().all()
+
                 for u in users:
+                    # Забираем до 3 карт
                     cards_list = (await session.execute(
                         select(UserCard).where(UserCard.user_id == u.id).limit(3)
                     )).scalars().all()
                     for c in cards_list:
                         await session.delete(c)
+
+                    # Списываем баланс
                     if u.balance >= u.loan_amount:
                         u.balance -= u.loan_amount
                     else:
                         u.balance = 0
+
                     u.loan_amount = 0
                     u.loan_due_at = None
                     u.trust_score -= 5
+
                     try:
                         await bot.send_message(
                             u.telegram_id,
                             "⚠️ <b>ПРОСРОЧКА!</b>\n\nБанк забрал твои карты.",
-                            parse_mode="HTML"
+                            parse_mode="HTML",
                         )
                     except Exception:
                         pass
+
                 await session.commit()
                 logger.info(f"🏦 Просрочка: {len(users)}")
         except Exception as e:
@@ -98,7 +121,9 @@ async def loan_check_task():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 Запуск Indy Carts...")
+    """Запуск и остановка приложения."""
+    logger.info("🚀 Запуск Indy Carts v0.6.1...")
+
     await init_db()
     asyncio.create_task(save_prices_task())
     asyncio.create_task(market_task())
@@ -109,36 +134,48 @@ async def lifespan(app: FastAPI):
         url=webhook_url,
         secret_token=settings.WEBHOOK_SECRET,
         drop_pending_updates=True,
-        allowed_updates=["message", "callback_query"]
+        allowed_updates=["message", "callback_query"],
     )
     logger.info(f"✅ Вебхук: {webhook_url}")
+
     yield
+
     await bot.session.close()
     await close_db()
+    logger.info("🛑 Остановлен")
 
 
-app = FastAPI(title="Indy Carts", version="0.6.0", lifespan=lifespan)
+app = FastAPI(title="Indy Carts", version="0.6.1", lifespan=lifespan)
 
 
 @app.post("/webhook")
-async def webhook(request: Request):
+async def webhook(request: Request) -> Response:
+    """Обработка вебхука от Telegram."""
     if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != settings.WEBHOOK_SECRET:
         return Response(status_code=403)
+
     try:
         data = await request.json()
         update = types.Update.model_validate(data, context={"bot": bot})
         await dp.feed_update(bot, update)
     except Exception as e:
         logger.error(f"❌ {e}")
+
     return Response(status_code=200)
 
 
 @app.get("/health")
-async def health():
+async def health() -> dict:
+    """Health check для пингера Render."""
     try:
         info = await bot.get_webhook_info()
         me = await bot.get_me()
-        return {"status": "ok", "version": "0.6.0", "bot": me.username, "webhook": info.url}
+        return {
+            "status": "ok",
+            "version": "0.6.1",
+            "bot": me.username,
+            "webhook": info.url,
+        }
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
