@@ -1,18 +1,24 @@
+"""Клавиатуры карт: меню, фильтр, слияние."""
+
 from aiogram.filters.callback_data import CallbackData
-from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
 from bot.keyboards.main import MainMenu
 
 
 class CardsMenu(CallbackData, prefix="cards"):
+    """Меню карт."""
     action: str
 
 
 class CardsFilter(CallbackData, prefix="cflt"):
+    """Фильтр по редкости."""
     rarity: str
 
 
 def get_cards_menu() -> InlineKeyboardMarkup:
+    """Меню карт: коллекция, дроп, слияние."""
     b = InlineKeyboardBuilder()
     b.button(text="🃏 Моя коллекция", callback_data=CardsMenu(action="my"))
     b.button(text="🎴 Дроп", callback_data=CardsMenu(action="drop"))
@@ -23,6 +29,7 @@ def get_cards_menu() -> InlineKeyboardMarkup:
 
 
 def get_filter_menu() -> InlineKeyboardMarkup:
+    """Фильтр коллекции по редкости."""
     b = InlineKeyboardBuilder()
     b.button(text="🔵 Basic", callback_data=CardsFilter(rarity="basic"))
     b.button(text="🟢 Rare", callback_data=CardsFilter(rarity="rare"))
@@ -38,6 +45,7 @@ def get_filter_menu() -> InlineKeyboardMarkup:
 
 
 def get_merge_menu() -> InlineKeyboardMarkup:
+    """Меню слияния."""
     b = InlineKeyboardBuilder()
     b.button(text="🔵 Basic ×3 → Rare", callback_data="mg_basic")
     b.button(text="🟢 Rare ×3 → Epic", callback_data="mg_rare")
@@ -46,4 +54,4 @@ def get_merge_menu() -> InlineKeyboardMarkup:
     b.button(text="🟡 Legendary ×3 → Limited (20%)", callback_data="mg_legendary")
     b.button(text="🔙 Назад", callback_data=CardsMenu(action="back_to_cards"))
     b.adjust(1)
-    return b.as_markup() 
+    return b.as_markup()
