@@ -28,4 +28,4 @@ class UserNotFound(IndyCartsError):
 
 class BattleNotActive(IndyCartsError):
     """Дуэль неактивна."""
-    pass
+    pass 
