@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger, Boolean, Date, DateTime, ForeignKey,
-    Integer, String, UniqueConstraint, func,
+    Integer, String, Text, UniqueConstraint, func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -43,6 +43,9 @@ class User(Base):
 
     shop_attempts_today: Mapped[int] = mapped_column(Integer, default=0)
     last_shop_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    referred_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    referral_count: Mapped[int] = mapped_column(Integer, default=0)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -188,4 +191,15 @@ class AdminRole(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
     role: Mapped[str] = mapped_column(String(16), nullable=False, default="admin")
     appointed_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    appointed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now()) 
+    appointed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class Referral(Base):
+    """Реферальная связь."""
+    __tablename__ = "referrals"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    referrer_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    referred_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    rewarded: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now()) 
