@@ -21,5 +21,9 @@ class Settings(BaseSettings):
     SHOP_COIN_PER_ATTEMPT: int = 50
     MAX_ATTEMPTS_PER_DAY: int = 10
 
+    REFERRAL_BONUS_MONEY: int = 500
+    REFERRAL_BONUS_ATTEMPTS: int = 1
+    REFERRAL_MAX_PER_DAY: int = 10
+
 
 settings = Settings() 
