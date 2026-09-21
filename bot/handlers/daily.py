@@ -1,6 +1,7 @@
+
 """Ежедневная награда."""
 
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
@@ -17,7 +18,7 @@ router = Router()
 
 @router.callback_query(MainMenu.filter(F.action == "daily"))
 async def cb_daily(query: CallbackQuery) -> None:
-    """Выдаёт ежедневку (раз в день)."""
+    """Выдаёт ежедневку (раз в день). Если уже получена — таймер."""
     await safe_answer(query)
     today = date.today()
 
@@ -42,11 +43,28 @@ async def cb_daily(query: CallbackQuery) -> None:
             )
         )).scalar_one_or_none()
 
+        # Если уже получено — показываем таймер до следующей
         if claimed is not None:
             await session.commit()
-            await safe_render(query, "🎁 <b>Уже получено сегодня</b>", get_back_menu())
+
+            now = datetime.utcnow()
+            tomorrow = datetime(now.year, now.month, now.day) + timedelta(days=1)
+            diff = tomorrow - now
+
+            hours = diff.seconds // 3600
+            minutes = (diff.seconds % 3600) // 60
+
+            await safe_render(
+                query,
+                f"🎁 <b>Ежедневная награда</b>\n\n"
+                f"✅ Уже получено сегодня\n\n"
+                f"⏳ Следующая через: <b>{hours}ч {minutes}м</b>\n\n"
+                f"🔥 Стрик: <b>{user.daily_streak}</b>",
+                get_back_menu(),
+            )
             return
 
+        # Выдаём награду
         user.balance += settings.DAILY_MONEY
         user.daily_streak += 1
         user.daily_attempts = settings.DAILY_ATTEMPTS
@@ -66,6 +84,7 @@ async def cb_daily(query: CallbackQuery) -> None:
         f"🎁 <b>Ежедневный бонус</b>\n\n"
         f"💰 +{settings.DAILY_MONEY}\n"
         f"🎴 +{settings.DAILY_ATTEMPTS}\n"
-        f"🔥 Стрик: {streak}",
+        f"🔥 Стрик: {streak}\n\n"
+        f"⏳ Следующая через <b>24ч</b>",
         get_back_menu(),
-    ) 
+                  ) 
