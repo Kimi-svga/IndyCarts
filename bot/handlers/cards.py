@@ -1,6 +1,6 @@
 """Обработчики карт: коллекция, дроп, трейды, продажа, слияние."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -30,31 +30,20 @@ class TradeState(StatesGroup):
     waiting_username = State()
 
 
-# ─────────────────────────────────────────────
-# МЕНЮ КАРТ
-# ─────────────────────────────────────────────
-
 @router.callback_query(MainMenu.filter(F.action == "cards"))
 async def cb_cards(query: CallbackQuery) -> None:
-    """Открывает меню карт."""
     await safe_answer(query)
     await safe_render(query, "🃏 <b>Карты</b>", get_cards_menu())
 
 
 @router.callback_query(CardsMenu.filter(F.action == "back_to_cards"))
 async def cb_cards_back(query: CallbackQuery) -> None:
-    """Возврат из фильтров/слияния."""
     await safe_answer(query)
     await safe_render(query, "🃏 <b>Карты</b>", get_cards_menu())
 
 
-# ─────────────────────────────────────────────
-# КОЛЛЕКЦИЯ
-# ─────────────────────────────────────────────
-
 @router.callback_query(CardsMenu.filter(F.action == "my"))
 async def cb_my(query: CallbackQuery) -> None:
-    """Открывает фильтр коллекции."""
     await safe_answer(query)
     await safe_render(
         query,
@@ -65,7 +54,6 @@ async def cb_my(query: CallbackQuery) -> None:
 
 @router.callback_query(CardsFilter.filter())
 async def cb_filter(query: CallbackQuery, callback_data: CardsFilter) -> None:
-    """Показывает карты игрока выбранной редкости."""
     await safe_answer(query)
     rarity = callback_data.rarity
 
@@ -100,7 +88,6 @@ async def cb_filter(query: CallbackQuery, callback_data: CardsFilter) -> None:
 
 
 async def show_card(query: CallbackQuery, rows: list, index: int) -> None:
-    """Показывает карту с навигацией."""
     user_card, card = rows[index]
     emoji = RARITY_EMOJI.get(card.rarity, "⚪")
     iw = " ⭐ IW" if user_card.is_iw else ""
@@ -140,7 +127,6 @@ async def show_card(query: CallbackQuery, rows: list, index: int) -> None:
 
 @router.callback_query(F.data.startswith("crd_"))
 async def cb_card_nav(query: CallbackQuery) -> None:
-    """Навигация по карусели."""
     await safe_answer(query)
     index = int(query.data.replace("crd_", ""))
 
@@ -166,13 +152,8 @@ async def cb_card_nav(query: CallbackQuery) -> None:
     await show_card(query, rows, index)
 
 
-# ─────────────────────────────────────────────
-# ИНДЕКС ЦЕНЫ
-# ─────────────────────────────────────────────
-
 @router.callback_query(F.data.startswith("idx_"))
 async def cb_index(query: CallbackQuery) -> None:
-    """Показывает динамику цены за 1ч, 6ч, 24ч, 7д."""
     await safe_answer(query)
     card_id = int(query.data.replace("idx_", ""))
 
@@ -198,13 +179,8 @@ async def cb_index(query: CallbackQuery) -> None:
     await safe_render(query, text, b.as_markup())
 
 
-# ─────────────────────────────────────────────
-# ТРЕЙД
-# ─────────────────────────────────────────────
-
 @router.callback_query(F.data.startswith("trd_"))
 async def cb_trade_start(query: CallbackQuery, state: FSMContext) -> None:
-    """Начинает трейд: запрашивает юз."""
     await safe_answer(query)
     user_card_id = int(query.data.replace("trd_", ""))
     await state.update_data(trade_uc_id=user_card_id)
@@ -221,7 +197,6 @@ async def cb_trade_start(query: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(TradeState.waiting_username)
 async def cb_trade_confirm(message: Message, state: FSMContext) -> None:
-    """Обрабатывает ввод юза и передаёт карту."""
     username = message.text.strip().lstrip("@").lower()
     data = await state.get_data()
     user_card_id = data.get("trade_uc_id")
@@ -274,31 +249,22 @@ async def cb_trade_confirm(message: Message, state: FSMContext) -> None:
         sender_name = sender.username
 
     await message.answer(
-        f"✅ <b>Карта передана!</b>\n\n"
-        f"Кому: @{username}\n"
-        f"Карта: {card_name}",
+        f"✅ <b>Карта передана!</b>\n\nКому: @{username}\nКарта: {card_name}",
         parse_mode="HTML",
     )
 
     try:
         await message.bot.send_message(
             receiver_tg,
-            f"🎁 <b>Ты получил карту!</b>\n\n"
-            f"От: @{sender_name}\n"
-            f"Карта: {card_name}",
+            f"🎁 <b>Ты получил карту!</b>\n\nОт: @{sender_name}\nКарта: {card_name}",
             parse_mode="HTML",
         )
     except Exception:
         pass
 
 
-# ─────────────────────────────────────────────
-# ПРОДАЖА (без кулдауна)
-# ─────────────────────────────────────────────
-
 @router.callback_query(F.data.startswith("sll_"))
 async def cb_sell(query: CallbackQuery) -> None:
-    """Продаёт карту боту с комиссией MARKET_FEE. Без кулдауна."""
     await safe_answer(query)
     user_card_id = int(query.data.replace("sll_", ""))
 
@@ -332,13 +298,8 @@ async def cb_sell(query: CallbackQuery) -> None:
     await cb_my(query)
 
 
-# ─────────────────────────────────────────────
-# ДРОП (без кулдауна)
-# ─────────────────────────────────────────────
-
 @router.callback_query(CardsMenu.filter(F.action == "drop"))
 async def cb_drop(query: CallbackQuery) -> None:
-    """Дроп карты. Без кулдауна — защита через лимит попыток и комиссию."""
     await safe_answer(query)
     today = date.today()
 
@@ -351,16 +312,23 @@ async def cb_drop(query: CallbackQuery) -> None:
             await safe_render(query, "❌ Сначала /start")
             return
 
-        # Сброс попыток в полночь
         if user.last_attempt_date != today:
             user.daily_attempts = settings.DAILY_ATTEMPTS
             user.last_attempt_date = today
             await session.commit()
 
         if user.daily_attempts <= 0:
+            now = datetime.utcnow()
+            tomorrow = datetime(now.year, now.month, now.day) + timedelta(days=1)
+            diff = tomorrow - now
+            hours = diff.seconds // 3600
+            minutes = (diff.seconds % 3600) // 60
+
             await safe_render(
                 query,
-                "🎴 <b>Попытки закончились</b>\n\nВозвращайся завтра!",
+                f"🎴 <b>Попытки закончились</b>\n\n"
+                f"⏳ Следующие через: <b>{hours}ч {minutes}м</b>\n\n"
+                f"Или купи в 🛒 Магазине.",
                 get_cards_menu(),
             )
             return
@@ -418,27 +386,18 @@ async def cb_drop(query: CallbackQuery) -> None:
     await safe_render(query, text, b.as_markup(), photo_file_id=card_image)
 
 
-# ─────────────────────────────────────────────
-# СЛИЯНИЕ
-# ─────────────────────────────────────────────
-
 @router.callback_query(CardsMenu.filter(F.action == "merge"))
 async def cb_merge_menu(query: CallbackQuery) -> None:
-    """Открывает меню слияния."""
     await safe_answer(query)
     await safe_render(
         query,
-        "🔀 <b>Слияние карт</b>\n\n"
-        "3 карты → 1 новая\n"
-        "Шанс успеха: <b>70%</b>\n"
-        "Legendary → Limited: <b>20%</b>",
+        "🔀 <b>Слияние карт</b>\n\n3 карты → 1 новая\nШанс: <b>70%</b>\nLegendary → Limited: <b>20%</b>",
         get_merge_menu(),
     )
 
 
 @router.callback_query(F.data.startswith("mg_"))
 async def cb_merge(query: CallbackQuery) -> None:
-    """Обрабатывает слияние."""
     await safe_answer(query)
     rarity = query.data.replace("mg_", "")
 
@@ -452,27 +411,20 @@ async def cb_merge(query: CallbackQuery) -> None:
 
         result = await merge_cards(session, user.id, rarity)
 
-    if not result.ok:
-        await safe_answer(query, result.reason or "❌ Ошибка", show_alert=True)
+    if not result["ok"]:
+        await safe_answer(query, result["reason"], show_alert=True)
         return
 
-    if result.result == "burn":
-        await safe_render(
-            query,
-            "❌ <b>Фейл!</b>\n\nКарты сгорели.",
-            get_merge_menu(),
-        )
+    if result["result"] == "burn":
+        await safe_render(query, "❌ <b>Фейл!</b>\n\nКарты сгорели.", get_merge_menu())
     else:
         await safe_render(
             query,
-            f"✅ <b>Успех!</b>\n\n"
-            f"Получена: {RARITY_NAMES[result.result]}\n"
-            f"{result.card_name}",
+            f"✅ <b>Успех!</b>\n\nПолучена: {RARITY_NAMES[result['result']]}\n{result['card_name']}",
             get_merge_menu(),
         )
 
 
 @router.callback_query(F.data == "noop")
 async def cb_noop(query: CallbackQuery) -> None:
-    """Пустой колбэк."""
     await safe_answer(query) 
