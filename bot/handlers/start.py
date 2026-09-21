@@ -1,4 +1,4 @@
-"""Старт, регистрация, подписка на канал."""
+"""Старт, регистрация, подписка."""
 
 from aiogram import Bot, F, Router
 from aiogram.filters import CommandStart
@@ -16,7 +16,7 @@ from bot.keyboards.main import MainMenu, get_main_menu
 from bot.utils.stable import safe_answer, safe_render
 from core.config import settings
 from core.constants import RESERVED_USERNAMES, USERNAME_PATTERN
-from db.models import User
+from db.models import Referral, User
 from db.session import AsyncSessionLocal
 
 router = Router()
@@ -29,7 +29,7 @@ class RegState(StatesGroup):
 
 
 async def is_subscribed(bot: Bot, user_id: int) -> bool:
-    """Проверяет подписку игрока на канал."""
+    """Проверяет подписку на канал."""
     try:
         member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
         return member.status in ("member", "administrator", "creator")
@@ -47,7 +47,7 @@ def subscribe_keyboard() -> InlineKeyboardMarkup:
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext) -> None:
-    """Обработка /start."""
+    """Обработка /start (с реферальной ссылкой)."""
     if not await is_subscribed(message.bot, message.from_user.id):
         await message.answer(
             "🏁 <b>Добро пожаловать в Indy Carts!</b>\n\n"
@@ -57,6 +57,14 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             parse_mode="HTML",
         )
         return
+
+    args = message.text.split(maxsplit=1)
+    referrer_id = None
+    if len(args) > 1 and args[1].startswith("ref_"):
+        try:
+            referrer_id = int(args[1].replace("ref_", ""))
+        except ValueError:
+            referrer_id = None
 
     async with AsyncSessionLocal() as session:
         user = (await session.execute(
@@ -73,6 +81,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         )
         return
 
+    await state.update_data(referrer_id=referrer_id)
     await state.set_state(RegState.waiting_username)
     await message.answer(
         "🏁 <b>Добро пожаловать!</b>\n\n"
@@ -112,13 +121,16 @@ async def cb_check_sub(query: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(RegState.waiting_username, F.text.regexp(USERNAME_PATTERN))
 async def handle_username(message: Message, state: FSMContext) -> None:
-    """Регистрация с проверкой уникальности."""
+    """Регистрация с реферальной наградой."""
     username = message.text.strip()
     norm = username.lower()
 
     if norm in RESERVED_USERNAMES:
         await message.answer("❌ Ник зарезервирован.")
         return
+
+    data = await state.get_data()
+    referrer_id = data.get("referrer_id")
 
     async with AsyncSessionLocal() as session:
         existing = (await session.execute(
@@ -129,21 +141,67 @@ async def handle_username(message: Message, state: FSMContext) -> None:
             await message.answer("❌ Ник занят.")
             return
 
-        session.add(User(
+        new_user = User(
             telegram_id=message.from_user.id,
             username=username,
             username_normalized=norm,
             first_name=message.from_user.first_name or "Игрок",
             balance=settings.DAILY_MONEY,
             daily_attempts=settings.DAILY_ATTEMPTS,
-        ))
+            referred_by=referrer_id,
+        )
+        session.add(new_user)
         await session.commit()
+        await session.refresh(new_user)
+
+        ref_text = ""
+        if referrer_id is not None:
+            referrer = (await session.execute(
+                select(User).where(User.id == referrer_id)
+            )).scalar_one_or_none()
+
+            if referrer is not None and referrer.id != new_user.id:
+                already = (await session.execute(
+                    select(Referral).where(Referral.referred_id == new_user.id)
+                )).scalar_one_or_none()
+
+                if already is None:
+                    session.add(Referral(
+                        referrer_id=referrer.id,
+                        referred_id=new_user.id,
+                        rewarded=True,
+                    ))
+                    referrer.balance += settings.REFERRAL_BONUS_MONEY
+                    referrer.daily_attempts += settings.REFERRAL_BONUS_ATTEMPTS
+                    referrer.referral_count += 1
+
+                    new_user.balance += settings.REFERRAL_BONUS_MONEY
+                    new_user.daily_attempts += settings.REFERRAL_BONUS_ATTEMPTS
+
+                    await session.commit()
+                    ref_text = (
+                        f"\n\n👥 <b>По приглашению</b>\n"
+                        f"💰 +{settings.REFERRAL_BONUS_MONEY} монет\n"
+                        f"🎴 +{settings.REFERRAL_BONUS_ATTEMPTS} попытка"
+                    )
+
+                    try:
+                        await message.bot.send_message(
+                            referrer.telegram_id,
+                            f"👥 <b>Новый реферал!</b>\n\n"
+                            f"@{username} присоединился по твоей ссылке.\n"
+                            f"💰 +{settings.REFERRAL_BONUS_MONEY} монет\n"
+                            f"🎴 +{settings.REFERRAL_BONUS_ATTEMPTS} попытка",
+                            parse_mode="HTML",
+                        )
+                    except Exception:
+                        pass
 
     await state.clear()
     await message.answer(
         f"✅ <b>@{username}</b>, ты в игре!\n\n"
         f"💰 {settings.DAILY_MONEY} монет\n"
-        f"🎴 {settings.DAILY_ATTEMPTS} попытки",
+        f"🎴 {settings.DAILY_ATTEMPTS} попытки{ref_text}",
         reply_markup=get_main_menu(is_owner=message.from_user.id in settings.OWNER_IDS),
         parse_mode="HTML",
     )
@@ -151,16 +209,14 @@ async def handle_username(message: Message, state: FSMContext) -> None:
 
 @router.message(RegState.waiting_username)
 async def handle_bad_username(message: Message) -> None:
-    """Неверный формат ника."""
     await message.answer("❌ Ник должен быть 3–20 символов, латиница, начинаться с буквы.")
 
 
 @router.callback_query(MainMenu.filter(F.action == "back"))
 async def cb_back(query: CallbackQuery) -> None:
-    """Возврат в главное меню."""
     await safe_answer(query)
     await safe_render(
         query,
         "🏁 <b>Главное меню</b>",
         get_main_menu(is_owner=query.from_user.id in settings.OWNER_IDS),
-    )
+) 
