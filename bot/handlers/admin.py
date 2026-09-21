@@ -1,4 +1,4 @@
-"""Админ-панель: карты, промокоды, рассылка, статистика, баланс."""
+"""Админ-панель: карты, промокоды, рассылка, статистика, баланс, редактор, награды."""
 
 import asyncio
 import json
@@ -16,13 +16,19 @@ from bot.keyboards.main import get_back_menu
 from bot.utils.decorators import require_admin
 from bot.utils.stable import safe_answer, safe_render
 from core.config import settings
-from core.constants import CEILING_MULTIPLIER, FLOOR_MULTIPLIER, RARITIES, RARITY_EMOJI, RARITY_NAMES
-from db.models import Card, PromoCode, Reward, User
+from core.constants import (
+    CEILING_MULTIPLIER, FLOOR_MULTIPLIER,
+    RARITIES, RARITY_EMOJI, RARITY_NAMES,
+)
+from db.models import Card, PromoCode, PvpReward, Reward, User
 from db.session import AsyncSessionLocal
-from db.models import PvpReward 
 
 router = Router()
 
+
+# ─────────────────────────────────────────────
+# СОСТОЯНИЯ
+# ─────────────────────────────────────────────
 
 class AddCard(StatesGroup):
     """Пошаговое создание карты."""
@@ -41,12 +47,13 @@ class AddPromo(StatesGroup):
     code = State()
     money = State()
     attempts = State()
+    max_acts = State()
     card = State()
 
 
 class Broadcast(StatesGroup):
     """Рассылка."""
-    text = State()
+    content = State()
 
 
 class EditCard(StatesGroup):
@@ -67,28 +74,30 @@ class EditCard(StatesGroup):
 async def cmd_admin(message: Message) -> None:
     """Открывает панель админа."""
     uid = message.from_user.id
-
     is_allowed = uid in settings.OWNER_IDS or uid in settings.ADMIN_IDS
 
     if not is_allowed:
+        from db.models import AdminRole
         async with AsyncSessionLocal() as session:
             user = (await session.execute(
                 select(User).where(User.telegram_id == uid)
             )).scalar_one_or_none()
 
             if user is not None:
-                from db.models import AdminRole
                 role = (await session.execute(
                     select(AdminRole).where(AdminRole.user_id == user.id)
                 )).scalar_one_or_none()
-
                 if role is not None:
                     is_allowed = True
 
     if not is_allowed:
         return
 
-    await message.answer("👑 <b>Панель P4/9</b>", reply_markup=get_admin_menu(), parse_mode="HTML")
+    await message.answer(
+        "👑 <b>Панель P4/9</b>",
+        reply_markup=get_admin_menu(),
+        parse_mode="HTML",
+    )
 
 
 # ─────────────────────────────────────────────
@@ -260,7 +269,8 @@ async def handle_import(message: Message) -> None:
         for item in data:
             base = item.get("base_price", 100)
             session.add(Card(
-                name=item["name"], rarity=item["rarity"], team=item.get("team"), year=item.get("year"),
+                name=item["name"], rarity=item["rarity"],
+                team=item.get("team"), year=item.get("year"),
                 base_price=base, current_price=base,
                 floor_price=int(base * FLOOR_MULTIPLIER),
                 ceiling_price=int(base * CEILING_MULTIPLIER),
@@ -285,7 +295,7 @@ async def cb_add_promo(query: CallbackQuery, state: FSMContext) -> None:
     """Шаг 1: код."""
     await safe_answer(query)
     await state.set_state(AddPromo.code)
-    await safe_render(query, "🎁 Шаг 1/4: Код промокода")
+    await safe_render(query, "🎁 Шаг 1/5: Код промокода")
 
 
 @router.message(AddPromo.code)
@@ -293,7 +303,7 @@ async def ap_code(message: Message, state: FSMContext) -> None:
     """Шаг 2: монеты."""
     await state.update_data(code=message.text.strip().upper())
     await state.set_state(AddPromo.money)
-    await message.answer("Шаг 2/4: Монеты")
+    await message.answer("Шаг 2/5: Монеты")
 
 
 @router.message(AddPromo.money)
@@ -306,20 +316,33 @@ async def ap_money(message: Message, state: FSMContext) -> None:
         return
     await state.update_data(money=money)
     await state.set_state(AddPromo.attempts)
-    await message.answer("Шаг 3/4: Попытки")
+    await message.answer("Шаг 3/5: Попытки")
 
 
 @router.message(AddPromo.attempts)
 async def ap_attempts(message: Message, state: FSMContext) -> None:
-    """Шаг 4: ID карты."""
+    """Шаг 4: лимит активаций."""
     try:
         attempts = int(message.text.strip())
     except ValueError:
         await message.answer("❌ Число")
         return
     await state.update_data(attempts=attempts)
+    await state.set_state(AddPromo.max_acts)
+    await message.answer("Шаг 4/5: Максимум активаций (0 = без лимита)")
+
+
+@router.message(AddPromo.max_acts)
+async def ap_max_acts(message: Message, state: FSMContext) -> None:
+    """Шаг 5: карта."""
+    try:
+        max_acts = int(message.text.strip())
+    except ValueError:
+        await message.answer("❌ Число")
+        return
+    await state.update_data(max_acts=max_acts if max_acts > 0 else None)
     await state.set_state(AddPromo.card)
-    await message.answer("Шаг 4/4: ID карты (0 = без карты)")
+    await message.answer("Шаг 5/5: ID карты (0 = без карты)")
 
 
 @router.message(AddPromo.card)
@@ -340,34 +363,43 @@ async def ap_card(message: Message, state: FSMContext) -> None:
             reward_money=data["money"],
             reward_attempts=data["attempts"],
             reward_card_id=card_id if card_id > 0 else None,
+            max_activations=data.get("max_acts"),
         ))
         await session.commit()
 
     card_text = f"\n🎴 + карта #{card_id}" if card_id > 0 else ""
+    limit_text = f"\n🔢 Лимит: {data['max_acts']}" if data.get("max_acts") else "\n🔢 Без лимита"
+
     await message.answer(
         f"✅ Промокод <code>{data['code']}</code> создан\n"
         f"💰 +{data['money']} монет\n"
-        f"🎴 +{data['attempts']} попыток{card_text}",
+        f"🎴 +{data['attempts']} попыток"
+        f"{card_text}{limit_text}",
         parse_mode="HTML",
     )
 
 
 # ─────────────────────────────────────────────
-# РАССЫЛКА
+# РАССЫЛКА (с фото)
 # ─────────────────────────────────────────────
 
 @router.callback_query(AdminMenu.filter(F.action == "broadcast"))
 @require_admin
 async def cb_broadcast(query: CallbackQuery, state: FSMContext) -> None:
-    """Запрашивает текст."""
+    """Запрашивает контент."""
     await safe_answer(query)
-    await state.set_state(Broadcast.text)
-    await safe_render(query, "📨 Отправь текст для рассылки", get_back_menu())
+    await state.set_state(Broadcast.content)
+    await safe_render(
+        query,
+        "📨 <b>Рассылка</b>\n\n"
+        "Отправь текст или фото с подписью.",
+        get_back_menu(),
+    )
 
 
-@router.message(Broadcast.text)
+@router.message(Broadcast.content)
 async def do_broadcast(message: Message, state: FSMContext) -> None:
-    """Рассылает всем."""
+    """Рассылает текст или фото."""
     await state.clear()
 
     async with AsyncSessionLocal() as session:
@@ -376,13 +408,26 @@ async def do_broadcast(message: Message, state: FSMContext) -> None:
     count = 0
     await message.answer(f"⏳ Рассылка для {len(users)}...")
 
-    for uid in users:
-        try:
-            await message.bot.send_message(uid, message.text)
-            count += 1
-            await asyncio.sleep(0.05)
-        except Exception:
-            pass
+    if message.photo:
+        file_id = message.photo[-1].file_id
+        caption = message.caption or ""
+        for uid in users:
+            try:
+                await message.bot.send_photo(
+                    uid, file_id, caption=caption, parse_mode="HTML"
+                )
+                count += 1
+                await asyncio.sleep(0.05)
+            except Exception:
+                pass
+    else:
+        for uid in users:
+            try:
+                await message.bot.send_message(uid, message.text, parse_mode="HTML")
+                count += 1
+                await asyncio.sleep(0.05)
+            except Exception:
+                pass
 
     await message.answer(f"✅ Отправлено: {count}")
 
@@ -416,7 +461,10 @@ async def cmd_setbalance(message: Message) -> None:
 
     parts = message.text.split()
     if len(parts) < 3:
-        await message.answer("Использование: <code>/setbalance @username сумма</code>", parse_mode="HTML")
+        await message.answer(
+            "Использование: <code>/setbalance @username сумма</code>",
+            parse_mode="HTML",
+        )
         return
 
     username = parts[1].lstrip("@").lower()
@@ -569,7 +617,9 @@ async def ef_price(message: Message, state: FSMContext) -> None:
     card_id = data["edit_card_id"]
 
     async with AsyncSessionLocal() as session:
-        card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
+        card = (await session.execute(
+            select(Card).where(Card.id == card_id)
+        )).scalar_one_or_none()
         if card is not None:
             card.base_price = price
             card.current_price = price
@@ -602,7 +652,9 @@ async def ef_weight(message: Message, state: FSMContext) -> None:
     card_id = data["edit_card_id"]
 
     async with AsyncSessionLocal() as session:
-        card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
+        card = (await session.execute(
+            select(Card).where(Card.id == card_id)
+        )).scalar_one_or_none()
         if card is not None:
             card.drop_weight = weight
             await session.commit()
@@ -632,7 +684,9 @@ async def ef_supply(message: Message, state: FSMContext) -> None:
     card_id = data["edit_card_id"]
 
     async with AsyncSessionLocal() as session:
-        card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
+        card = (await session.execute(
+            select(Card).where(Card.id == card_id)
+        )).scalar_one_or_none()
         if card is not None:
             card.max_supply = supply if supply > 0 else None
             await session.commit()
@@ -657,7 +711,9 @@ async def ef_image(message: Message, state: FSMContext) -> None:
     card_id = data["edit_card_id"]
 
     async with AsyncSessionLocal() as session:
-        card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
+        card = (await session.execute(
+            select(Card).where(Card.id == card_id)
+        )).scalar_one_or_none()
         if card is not None:
             card.image_file_id = file_id
             await session.commit()
@@ -673,7 +729,9 @@ async def ef_image_skip(message: Message, state: FSMContext) -> None:
     card_id = data["edit_card_id"]
 
     async with AsyncSessionLocal() as session:
-        card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
+        card = (await session.execute(
+            select(Card).where(Card.id == card_id)
+        )).scalar_one_or_none()
         if card is not None:
             card.image_file_id = None
             await session.commit()
@@ -683,7 +741,7 @@ async def ef_image_skip(message: Message, state: FSMContext) -> None:
 
 
 # ─────────────────────────────────────────────
-# НАГРАДЫ
+# НАГРАДЫ ЗА БАЛАНС
 # ─────────────────────────────────────────────
 
 @router.callback_query(AdminMenu.filter(F.action == "rewards"))
@@ -704,13 +762,16 @@ async def cb_rewards(query: CallbackQuery) -> None:
 
 @router.message(Command("setreward"))
 async def cmd_setreward(message: Message) -> None:
-    """Устанавливает награду."""
+    """Устанавливает награду за топ по балансу."""
     if message.from_user.id not in settings.OWNER_IDS and message.from_user.id not in settings.ADMIN_IDS:
         return
 
     parts = message.text.split()
     if len(parts) < 4:
-        await message.answer("Формат: <code>/setreward позиция тип значение</code>", parse_mode="HTML")
+        await message.answer(
+            "Формат: <code>/setreward позиция тип значение</code>",
+            parse_mode="HTML",
+        )
         return
 
     try:
@@ -735,13 +796,13 @@ async def cmd_setreward(message: Message) -> None:
     await message.answer(f"✅ Награда для топ-{position}: {rtype} = {value}")
 
 
+# ─────────────────────────────────────────────
+# НАГРАДЫ PVP
+# ─────────────────────────────────────────────
+
 @router.message(Command("setpvpreward"))
 async def cmd_setpvpreward(message: Message) -> None:
-    """
-    Устанавливает награду за топ PvP.
-
-    Формат: /setpvpreward позиция деньги попытки [ID карты]
-    """
+    """Устанавливает награду за топ PvP."""
     if message.from_user.id not in settings.OWNER_IDS:
         return
 
@@ -785,4 +846,4 @@ async def cmd_setpvpreward(message: Message) -> None:
         f"✅ PvP-награда для топ-{position}:\n"
         f"💰 {money} монет\n"
         f"🎴 {attempts} попыток{card_text}"
-)
+    )
