@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request, Response
 
 from bot.handlers import (
     admin, bank, cards, daily, market, profile,
-    promo, pvp, rating, roles, shop, start,
+    promo, pvp, rating, ref, roles, shop, start,
 )
 from core.config import settings
 from core.logger import setup_logger
@@ -29,7 +29,7 @@ bot = Bot(
 dp = Dispatcher(storage=storage)
 dp.callback_query.middleware(CallbackAnswerMiddleware())
 
-for r in (start, profile, cards, daily, market, pvp, bank, rating, promo, admin, roles, shop):
+for r in (start, profile, cards, daily, market, pvp, bank, rating, promo, admin, roles, shop, ref):
     dp.include_router(r.router)
 
 
@@ -240,4 +240,4 @@ async def health() -> dict:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=settings.PORT) 
+    uvicorn.run(app, host="0.0.0.0", port=settings.PORT)
