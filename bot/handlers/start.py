@@ -1,7 +1,7 @@
-"""Старт, регистрация, подписка."""
+"""Старт, регистрация, подписка, реферальная система."""
 
 from aiogram import Bot, F, Router
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -10,16 +10,19 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     Message,
 )
+from aiogram.utils.deep_linking import decode_payload
 from sqlalchemy import select
 
 from bot.keyboards.main import MainMenu, get_main_menu
 from bot.utils.stable import safe_answer, safe_render
 from core.config import settings
 from core.constants import RESERVED_USERNAMES, USERNAME_PATTERN
+from core.logger import setup_logger
 from db.models import Referral, User
 from db.session import AsyncSessionLocal
 
 router = Router()
+logger = setup_logger()
 CHANNEL_ID = "@IndyCarts"
 
 
@@ -45,9 +48,43 @@ def subscribe_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
+@router.message(CommandStart(deep_link=True))
+async def cmd_start_deeplink(message: Message, command: CommandObject, state: FSMContext) -> None:
+    """
+    Обработка /start с реферальной ссылкой.
+
+    Aiogram 3 передаёт параметр через command.args.
+    Если ссылка закодирована (encode=True) — декодируем через decode_payload.
+    """
+    payload = command.args
+    logger.info(f"Deep link payload: {payload}")
+
+    referrer_id = None
+    if payload:
+        try:
+            # Декодируем (на случай если ссылка создана с encode=True)
+            decoded = decode_payload(payload)
+            referrer_id = int(decoded)
+            logger.info(f"Referrer ID: {referrer_id}")
+        except Exception as e:
+            logger.warning(f"Не удалось распарсить payload: {e}")
+            # Пробуем напрямую (если ссылка без encode)
+            try:
+                referrer_id = int(payload)
+            except ValueError:
+                referrer_id = None
+
+    await _start_logic(message, state, referrer_id)
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext) -> None:
-    """Обработка /start (с реферальной ссылкой)."""
+    """Обработка /start без реферальной ссылки."""
+    await _start_logic(message, state, None)
+
+
+async def _start_logic(message: Message, state: FSMContext, referrer_id: int | None) -> None:
+    """Общая логика /start."""
     if not await is_subscribed(message.bot, message.from_user.id):
         await message.answer(
             "🏁 <b>Добро пожаловать в Indy Carts!</b>\n\n"
@@ -57,14 +94,6 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             parse_mode="HTML",
         )
         return
-
-    args = message.text.split(maxsplit=1)
-    referrer_id = None
-    if len(args) > 1 and args[1].startswith("ref_"):
-        try:
-            referrer_id = int(args[1].replace("ref_", ""))
-        except ValueError:
-            referrer_id = None
 
     async with AsyncSessionLocal() as session:
         user = (await session.execute(
@@ -161,6 +190,7 @@ async def handle_username(message: Message, state: FSMContext) -> None:
             )).scalar_one_or_none()
 
             if referrer is not None and referrer.id != new_user.id:
+                # Проверяем, не был ли уже приглашён
                 already = (await session.execute(
                     select(Referral).where(Referral.referred_id == new_user.id)
                 )).scalar_one_or_none()
@@ -185,6 +215,7 @@ async def handle_username(message: Message, state: FSMContext) -> None:
                         f"🎴 +{settings.REFERRAL_BONUS_ATTEMPTS} попытка"
                     )
 
+                    # Уведомление пригласившему
                     try:
                         await message.bot.send_message(
                             referrer.telegram_id,
@@ -209,14 +240,16 @@ async def handle_username(message: Message, state: FSMContext) -> None:
 
 @router.message(RegState.waiting_username)
 async def handle_bad_username(message: Message) -> None:
+    """Неверный формат ника."""
     await message.answer("❌ Ник должен быть 3–20 символов, латиница, начинаться с буквы.")
 
 
 @router.callback_query(MainMenu.filter(F.action == "back"))
 async def cb_back(query: CallbackQuery) -> None:
+    """Возврат в главное меню."""
     await safe_answer(query)
     await safe_render(
         query,
         "🏁 <b>Главное меню</b>",
         get_main_menu(is_owner=query.from_user.id in settings.OWNER_IDS),
-) 
+    )
