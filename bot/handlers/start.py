@@ -10,7 +10,6 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     Message,
 )
-from aiogram.utils.deep_linking import decode_payload
 from sqlalchemy import select
 
 from bot.keyboards.main import MainMenu, get_main_menu
@@ -53,8 +52,7 @@ async def cmd_start_deeplink(message: Message, command: CommandObject, state: FS
     """
     Обработка /start с реферальной ссылкой.
 
-    Aiogram 3 передаёт параметр через command.args.
-    Если ссылка закодирована (encode=True) — декодируем через decode_payload.
+    Aiogram 3 передаёт параметр через command.args [citation:1][citation:2].
     """
     payload = command.args
     logger.info(f"Deep link payload: {payload}")
@@ -62,17 +60,16 @@ async def cmd_start_deeplink(message: Message, command: CommandObject, state: FS
     referrer_id = None
     if payload:
         try:
-            # Декодируем (на случай если ссылка создана с encode=True)
-            decoded = decode_payload(payload)
-            referrer_id = int(decoded)
-            logger.info(f"Referrer ID: {referrer_id}")
-        except Exception as e:
-            logger.warning(f"Не удалось распарсить payload: {e}")
-            # Пробуем напрямую (если ссылка без encode)
-            try:
+            # Пробуем распарсить как int (ссылка вида ref_123)
+            if payload.startswith("ref_"):
+                referrer_id = int(payload.replace("ref_", ""))
+            else:
+                # Пробуем напрямую
                 referrer_id = int(payload)
-            except ValueError:
-                referrer_id = None
+            logger.info(f"Referrer ID: {referrer_id}")
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"Не удалось распарсить payload: {e}")
+            referrer_id = None
 
     await _start_logic(message, state, referrer_id)
 
@@ -190,7 +187,6 @@ async def handle_username(message: Message, state: FSMContext) -> None:
             )).scalar_one_or_none()
 
             if referrer is not None and referrer.id != new_user.id:
-                # Проверяем, не был ли уже приглашён
                 already = (await session.execute(
                     select(Referral).where(Referral.referred_id == new_user.id)
                 )).scalar_one_or_none()
@@ -215,7 +211,6 @@ async def handle_username(message: Message, state: FSMContext) -> None:
                         f"🎴 +{settings.REFERRAL_BONUS_ATTEMPTS} попытка"
                     )
 
-                    # Уведомление пригласившему
                     try:
                         await message.bot.send_message(
                             referrer.telegram_id,
