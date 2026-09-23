@@ -10,10 +10,12 @@ from bot.keyboards.main import MainMenu
 from bot.keyboards.shop import ShopMenu, get_shop_menu
 from bot.utils.stable import safe_answer, safe_render
 from core.config import settings
+from core.logger import setup_logger
 from db.models import User
 from db.session import AsyncSessionLocal
 
 router = Router()
+logger = setup_logger()
 
 
 @router.callback_query(MainMenu.filter(F.action == "shop"))
@@ -34,44 +36,54 @@ async def cb_shop(query: CallbackQuery) -> None:
 
 @router.callback_query(ShopMenu.filter(F.action == "buy"))
 async def cb_shop_buy(query: CallbackQuery, callback_data: ShopMenu) -> None:
-    """Покупка попыток."""
+    """Покупка попыток с железобетонной транзакцией."""
     await safe_answer(query)
     attempts = callback_data.amount
     cost = attempts * settings.SHOP_COIN_PER_ATTEMPT
 
     async with AsyncSessionLocal() as session:
-        user = (await session.execute(
-            select(User).where(User.telegram_id == query.from_user.id)
-        )).scalar_one_or_none()
+        try:
+            # Блокируем строку пользователя, чтобы избежать race condition
+            user = (await session.execute(
+                select(User).where(User.telegram_id == query.from_user.id).with_for_update()
+            )).scalar_one_or_none()
 
-        if user is None:
-            await safe_render(query, "❌ Сначала /start")
+            if user is None:
+                await safe_render(query, "❌ Сначала /start")
+                return
+
+            today = date.today()
+            if user.last_shop_date != today:
+                user.shop_attempts_today = 0
+                user.last_shop_date = today
+
+            if user.shop_attempts_today + attempts > settings.MAX_ATTEMPTS_PER_DAY:
+                await safe_answer(
+                    query,
+                    f"❌ Лимит {settings.MAX_ATTEMPTS_PER_DAY} попыток в день",
+                    show_alert=True,
+                )
+                return
+
+            if user.balance < cost:
+                await safe_answer(query, f"❌ Нужно {cost} монет", show_alert=True)
+                return
+
+            # Списываем и начисляем В ОДНОЙ транзакции
+            user.balance -= cost
+            user.daily_attempts += attempts
+            user.shop_attempts_today += attempts
+
+            await session.commit()
+            logger.info(f"✅ @{user.username} купил {attempts} попыток за {cost}")
+
+            balance = user.balance
+            total_attempts = user.daily_attempts
+        except Exception as e:
+            await session.rollback()
+            logger.error(f"❌ Ошибка покупки попыток: {e}")
+            await safe_answer(query, "❌ Ошибка. Попробуй ещё раз.", show_alert=True)
             return
-
-        today = date.today()
-        if user.last_shop_date != today:
-            user.shop_attempts_today = 0
-            user.last_shop_date = today
-
-        if user.shop_attempts_today + attempts > settings.MAX_ATTEMPTS_PER_DAY:
-            await safe_answer(
-                query,
-                f"❌ Лимит {settings.MAX_ATTEMPTS_PER_DAY} попыток в день",
-                show_alert=True,
-            )
-            return
-
-        if user.balance < cost:
-            await safe_answer(query, f"❌ Нужно {cost} монет", show_alert=True)
-            return
-
-        user.balance -= cost
-        user.daily_attempts += attempts
-        user.shop_attempts_today += attempts
-        await session.commit()
-
-        balance = user.balance
-        total_attempts = user.daily_attempts
 
     await safe_render(
         query,
@@ -81,4 +93,4 @@ async def cb_shop_buy(query: CallbackQuery, callback_data: ShopMenu) -> None:
         f"Осталось: <b>{balance}</b> монет\n"
         f"Попыток: <b>{total_attempts}</b>",
         get_shop_menu(),
-    )
+) 
