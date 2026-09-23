@@ -1,4 +1,4 @@
-"""Админ-панель: карты, промокоды, рассылка, статистика, баланс, редактор, награды."""
+"""Админ-панель: карты, промокоды, рассылка, статистика, баланс, события, редактор, награды."""
 
 import asyncio
 import json
@@ -155,7 +155,7 @@ async def ac_year(message: Message, state: FSMContext) -> None:
         return
     await state.update_data(year=year)
     await state.set_state(AddCard.price)
-    await message.answer("Шаг 5/8: Цена")
+    await message.answer("Шаг 5/8: Базовая цена")
 
 
 @router.message(AddCard.price)
@@ -206,7 +206,8 @@ async def ac_image(message: Message, state: FSMContext) -> None:
 
     async with AsyncSessionLocal() as session:
         session.add(Card(
-            name=data["name"], rarity=data["rarity"], team=data["team"], year=data["year"],
+            name=data["name"], rarity=data["rarity"],
+            team=data["team"], year=data["year"],
             base_price=data["price"], current_price=data["price"],
             floor_price=int(data["price"] * FLOOR_MULTIPLIER),
             ceiling_price=int(data["price"] * CEILING_MULTIPLIER),
@@ -227,7 +228,8 @@ async def ac_skip(message: Message, state: FSMContext) -> None:
 
     async with AsyncSessionLocal() as session:
         session.add(Card(
-            name=data["name"], rarity=data["rarity"], team=data["team"], year=data["year"],
+            name=data["name"], rarity=data["rarity"],
+            team=data["team"], year=data["year"],
             base_price=data["price"], current_price=data["price"],
             floor_price=int(data["price"] * FLOOR_MULTIPLIER),
             ceiling_price=int(data["price"] * CEILING_MULTIPLIER),
@@ -493,6 +495,49 @@ async def cmd_setbalance(message: Message) -> None:
         f"✅ <b>Баланс изменён</b>\n\n@{name}: {old} → <b>{amount}</b>",
         parse_mode="HTML",
     )
+
+
+# ─────────────────────────────────────────────
+# СОБЫТИЕ НА БИРЖЕ
+# ─────────────────────────────────────────────
+
+@router.message(Command("event"))
+async def cmd_event(message: Message) -> None:
+    """
+    Событие по одной карте.
+
+    Формат: /event ID_КАРТЫ МОДИФИКАТОР
+    Пример: /event 1 1.2 — карта #1 +20%
+    """
+    if message.from_user.id not in settings.OWNER_IDS:
+        return
+
+    parts = message.text.split()
+    if len(parts) < 3:
+        await message.answer(
+            "Формат: <code>/event ID_КАРТЫ МОДИФИКАТОР</code>\n\n"
+            "Пример: <code>/event 1 1.2</code> — карта #1 +20%\n"
+            "Пример: <code>/event 5 0.85</code> — карта #5 -15%",
+            parse_mode="HTML",
+        )
+        return
+
+    try:
+        card_id = int(parts[1])
+        modifier = float(parts[2])
+    except ValueError:
+        await message.answer("❌ ID и модификатор — числа")
+        return
+
+    from services.market import Market
+
+    async with AsyncSessionLocal() as session:
+        new_price = await Market.apply_event(session, card_id, modifier)
+
+    if new_price:
+        await message.answer(f"✅ Карта #{card_id}: новая цена {new_price}")
+    else:
+        await message.answer("❌ Карта не найдена")
 
 
 # ─────────────────────────────────────────────
