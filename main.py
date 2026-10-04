@@ -18,6 +18,9 @@ from bot.handlers import (
 from core.config import settings
 from core.logger import setup_logger
 from db.session import AsyncSessionLocal, close_db, init_db
+from bot.middlewares.logger import LoggingMiddleware
+dp.message.middleware(LoggingMiddleware())
+dp.callback_query.middleware(LoggingMiddleware())
 
 logger = setup_logger()
 
