@@ -2,7 +2,7 @@
 
 import asyncio
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.client.default import DefaultBotProperties
@@ -19,7 +19,7 @@ from bot.handlers import (
 from bot.middlewares.logger import LoggingMiddleware
 from core.config import settings
 from core.logger import setup_logger
-from db.models import Card, PlusReward, Subscription, User, UserCard
+from db.models import Card, Loan, PlusReward, Subscription, User, UserCard
 from db.session import AsyncSessionLocal, close_db, init_db
 
 logger = setup_logger()
@@ -31,12 +31,10 @@ bot = Bot(
 )
 dp = Dispatcher(storage=storage)
 
-# ─── MIDDLEWARE ───
 dp.message.middleware(LoggingMiddleware())
 dp.callback_query.middleware(LoggingMiddleware())
 dp.callback_query.middleware(CallbackAnswerMiddleware())
 
-# ─── РОУТЕРЫ ───
 for r in (
     start, profile, cards, daily, market, pvp,
     bank, rating, promo, admin, roles, shop, ref,
@@ -81,42 +79,89 @@ async def market_task() -> None:
 
 
 async def loan_check_task() -> None:
+    """Каждый час — проверка просрочки кредитов (3 стадии)."""
+    from services.bank import apply_trust
+
     while True:
         await asyncio.sleep(3600)
         try:
             async with AsyncSessionLocal() as session:
                 now = datetime.utcnow()
-                users = (await session.execute(
-                    select(User).where(User.loan_amount > 0, User.loan_due_at < now)
+
+                # Стадия 1: active → overdue
+                to_overdue = (await session.execute(
+                    select(Loan).where(
+                        Loan.status == "active",
+                        Loan.due_at < now,
+                    )
                 )).scalars().all()
 
-                for u in users:
-                    cards_list = (await session.execute(
-                        select(UserCard).where(UserCard.user_id == u.id).limit(3)
+                for loan in to_overdue:
+                    loan.status = "overdue"
+                    user = await session.get(User, loan.user_id)
+                    if user:
+                        apply_trust(user, "overdue")
+                        try:
+                            await bot.send_message(
+                                user.telegram_id,
+                                "⚠️ <b>ПРОСРОЧКА кредита!</b>\n\n"
+                                "3 дня на погашение, иначе:\n"
+                                "• Конфискуется 10 карт\n"
+                                "• Баланс в минус\n"
+                                "• PvP блок на 7 дней",
+                                parse_mode="HTML",
+                            )
+                        except Exception:
+                            pass
+
+                # Стадия 2: overdue + 3 дня → defaulted
+                to_default = (await session.execute(
+                    select(Loan).where(
+                        Loan.status == "overdue",
+                        Loan.due_at < now - timedelta(days=3),
+                    )
+                )).scalars().all()
+
+                for loan in to_default:
+                    loan.status = "defaulted"
+                    user = await session.get(User, loan.user_id)
+                    if not user:
+                        continue
+
+                    cards = (await session.execute(
+                        select(UserCard)
+                        .where(UserCard.user_id == user.id)
+                        .limit(settings.BANK_OVERDUE_CARDS_CONFISCATE)
                     )).scalars().all()
-                    for c in cards_list:
+                    for c in cards:
                         await session.delete(c)
 
-                    if u.balance >= u.loan_amount:
-                        u.balance -= u.loan_amount
-                    else:
-                        u.balance = 0
+                    remaining = loan.total_due - loan.paid
+                    user.balance -= remaining
 
-                    u.loan_amount = 0
-                    u.loan_due_at = None
-                    u.trust_score -= 5
+                    user.pvp_blocked_until = now + timedelta(days=settings.BANK_PVP_BLOCK_DAYS)
+
+                    apply_trust(user, "default")
 
                     try:
                         await bot.send_message(
-                            u.telegram_id,
-                            "⚠️ <b>ПРОСРОЧКА!</b>\n\nБанк забрал твои карты.",
+                            user.telegram_id,
+                            f"🚨 <b>ДЕФОЛТ!</b>\n\n"
+                            f"Конфисковано: <b>{len(cards)}</b> карт\n"
+                            f"Баланс: <b>{user.balance:,}</b>\n"
+                            f"PvP заблокирован на "
+                            f"<b>{settings.BANK_PVP_BLOCK_DAYS} дней</b>.",
                             parse_mode="HTML",
                         )
                     except Exception:
                         pass
 
                 await session.commit()
-                logger.info(f"🏦 Просрочка: {len(users)}")
+                if to_overdue or to_default:
+                    logger.info(
+                        f"🏦 Просрочка: {len(to_overdue)} → overdue, "
+                        f"{len(to_default)} → defaulted"
+                    )
         except Exception as e:
             logger.error(f"Кредиты: {e}")
 
@@ -177,7 +222,6 @@ async def pvp_rewards_task() -> None:
 
 
 async def subscription_check_task() -> None:
-    """Каждые 6 часов снимает истёкшие подписки."""
     while True:
         await asyncio.sleep(6 * 3600)
         try:
@@ -220,7 +264,6 @@ async def subscription_check_task() -> None:
 
 
 async def plus_monthly_rewards_task() -> None:
-    """1-го числа выдаёт подписчикам эксклюзивную карту."""
     while True:
         await asyncio.sleep(3600)
         now = datetime.utcnow()
@@ -244,7 +287,7 @@ async def plus_monthly_rewards_task() -> None:
                 )).scalar_one_or_none()
 
                 if card is None:
-                    logger.warning("💎 Нет plus-only карты для выдачи")
+                    logger.warning("💎 Нет plus-only карты")
                     continue
 
                 session.add(PlusReward(
@@ -289,7 +332,7 @@ async def plus_monthly_rewards_task() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 Запуск Indy Carts v0.8.0...")
+    logger.info("🚀 Запуск Indy Carts v0.9.0...")
 
     await init_db()
     asyncio.create_task(save_prices_task())
@@ -315,7 +358,7 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Остановлен")
 
 
-app = FastAPI(title="Indy Carts", version="0.8.0", lifespan=lifespan)
+app = FastAPI(title="Indy Carts", version="0.9.0", lifespan=lifespan)
 
 
 @app.post("/webhook")
@@ -340,7 +383,7 @@ async def health() -> dict:
         me = await bot.get_me()
         return {
             "status": "ok",
-            "version": "0.8.0",
+            "version": "0.9.0",
             "bot": me.username,
             "webhook": info.url,
         }
