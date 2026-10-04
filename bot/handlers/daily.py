@@ -1,4 +1,3 @@
-
 """Ежедневная награда."""
 
 from datetime import date, datetime, timedelta
@@ -16,6 +15,13 @@ from db.session import AsyncSessionLocal
 router = Router()
 
 
+def _attempts_for(user: User) -> int:
+    """Сколько попыток давать игроку (зависит от Indy+)."""
+    if user.plus_tier == "indy_plus":
+        return settings.PLUS_DAILY_ATTEMPTS
+    return settings.DAILY_ATTEMPTS
+
+
 @router.callback_query(MainMenu.filter(F.action == "daily"))
 async def cb_daily(query: CallbackQuery) -> None:
     """Выдаёт ежедневку (раз в день). Если уже получена — таймер."""
@@ -28,12 +34,14 @@ async def cb_daily(query: CallbackQuery) -> None:
         )).scalar_one_or_none()
 
         if user is None:
-            await safe_render(query, "❌ Сначала /start")
+            await safe_render(query, "❌ Сначала /start", get_back_menu())
             return
+
+        attempts_grant = _attempts_for(user)
 
         # Сброс попыток в полночь
         if user.last_attempt_date != today:
-            user.daily_attempts = settings.DAILY_ATTEMPTS
+            user.daily_attempts = attempts_grant
             user.last_attempt_date = today
 
         claimed = (await session.execute(
@@ -43,7 +51,7 @@ async def cb_daily(query: CallbackQuery) -> None:
             )
         )).scalar_one_or_none()
 
-        # Если уже получено — показываем таймер до следующей
+        # Уже получено — таймер
         if claimed is not None:
             await session.commit()
 
@@ -64,17 +72,18 @@ async def cb_daily(query: CallbackQuery) -> None:
             )
             return
 
-        # Выдаём награду
+        # Выдаём
         user.balance += settings.DAILY_MONEY
         user.daily_streak += 1
-        user.daily_attempts = settings.DAILY_ATTEMPTS
+        user.daily_attempts = attempts_grant
         user.last_attempt_date = today
+        user.last_daily_at = datetime.utcnow()
 
         session.add(DailyReward(
             user_id=user.id,
             reward_date=today,
             money=settings.DAILY_MONEY,
-            attempts=settings.DAILY_ATTEMPTS,
+            attempts=attempts_grant,
         ))
         await session.commit()
         streak = user.daily_streak
@@ -83,8 +92,8 @@ async def cb_daily(query: CallbackQuery) -> None:
         query,
         f"🎁 <b>Ежедневный бонус</b>\n\n"
         f"💰 +{settings.DAILY_MONEY}\n"
-        f"🎴 +{settings.DAILY_ATTEMPTS}\n"
+        f"🎴 +{attempts_grant}\n"
         f"🔥 Стрик: {streak}\n\n"
         f"⏳ Следующая через <b>24ч</b>",
         get_back_menu(),
-                  ) 
+        ) 
