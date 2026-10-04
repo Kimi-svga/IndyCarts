@@ -15,14 +15,15 @@ from bot.handlers import (
     admin, bank, cards, daily, market, menu, profile,
     promo, pvp, rating, ref, roles, shop, start,
 )
+from bot.middlewares.logger import LoggingMiddleware
 from core.config import settings
 from core.logger import setup_logger
 from db.session import AsyncSessionLocal, close_db, init_db
-from bot.middlewares.logger import LoggingMiddleware
-dp.message.middleware(LoggingMiddleware())
-dp.callback_query.middleware(LoggingMiddleware())
 
 logger = setup_logger()
+
+
+# ─── 1. STORAGE / BOT / DP ───
 
 storage = MemoryStorage()
 bot = Bot(
@@ -30,9 +31,17 @@ bot = Bot(
     default=DefaultBotProperties(parse_mode=ParseMode.HTML),
 )
 dp = Dispatcher(storage=storage)
+
+
+# ─── 2. MIDDLEWARE ───
+
+dp.message.middleware(LoggingMiddleware())
+dp.callback_query.middleware(LoggingMiddleware())
 dp.callback_query.middleware(CallbackAnswerMiddleware())
 
-# ВАЖНО: menu подключается последним — перекрывает старые cb_back
+
+# ─── 3. РОУТЕРЫ ───
+
 for r in (
     start, profile, cards, daily, market, pvp,
     bank, rating, promo, admin, roles, shop, ref,
@@ -41,8 +50,9 @@ for r in (
     dp.include_router(r.router)
 
 
+# ─── 4. КРОН-ЗАДАЧИ ───
+
 async def save_prices_task() -> None:
-    """Каждый час пишет цены в price_history."""
     from sqlalchemy import select
     from db.models import Card, PriceHistory
 
@@ -60,7 +70,6 @@ async def save_prices_task() -> None:
 
 
 async def market_task() -> None:
-    """Каждые 10 минут затухание цен."""
     from sqlalchemy import select
     from db.models import Card
     from services.economy import Economy
@@ -81,7 +90,6 @@ async def market_task() -> None:
 
 
 async def loan_check_task() -> None:
-    """Каждый час проверяет просрочку кредитов."""
     from sqlalchemy import select
     from db.models import User, UserCard
 
@@ -126,7 +134,6 @@ async def loan_check_task() -> None:
 
 
 async def pvp_rewards_task() -> None:
-    """Выдаёт награды топ-10 PvP 1-го числа в 00:00."""
     from sqlalchemy import select
     from db.models import PvpReward, User, UserCard
 
@@ -184,9 +191,10 @@ async def pvp_rewards_task() -> None:
             logger.error(f"PvP-награды: {e}")
 
 
+# ─── 5. LIFESPAN ───
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Запуск и остановка."""
     logger.info("🚀 Запуск Indy Carts v0.7.0...")
 
     await init_db()
@@ -211,12 +219,13 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Остановлен")
 
 
+# ─── 6. APP ───
+
 app = FastAPI(title="Indy Carts", version="0.7.0", lifespan=lifespan)
 
 
 @app.post("/webhook")
 async def webhook(request: Request) -> Response:
-    """Обработка вебхука."""
     if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != settings.WEBHOOK_SECRET:
         return Response(status_code=403)
 
@@ -232,7 +241,6 @@ async def webhook(request: Request) -> Response:
 
 @app.get("/health")
 async def health() -> dict:
-    """Health check."""
     try:
         info = await bot.get_webhook_info()
         me = await bot.get_me()
@@ -248,4 +256,4 @@ async def health() -> dict:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=settings.PORT)
+    uvicorn.run(app, host="0.0.0.0", port=settings.PORT) 
