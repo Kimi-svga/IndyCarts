@@ -37,9 +37,27 @@ class User(Base):
     pvp_losses: Mapped[int] = mapped_column(Integer, default=0)
     pvp_rating: Mapped[int] = mapped_column(Integer, default=1000, index=True)
 
+    # PvP 2.0
+    pvp_wins_total: Mapped[int] = mapped_column(Integer, default=0)
+    pvp_losses_total: Mapped[int] = mapped_column(Integer, default=0)
+    pvp_money_staked: Mapped[int] = mapped_column(BigInteger, default=0)
+    pvp_money_won: Mapped[int] = mapped_column(BigInteger, default=0)
+
+    # Сезоны
+    season_titles: Mapped[str] = mapped_column(Text, default="[]")
+    best_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    best_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    seasons_played: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Банк
     loan_amount: Mapped[int] = mapped_column(BigInteger, default=0)
     loan_due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     trust_score: Mapped[int] = mapped_column(Integer, default=0)
+    pvp_blocked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    loans_count: Mapped[int] = mapped_column(Integer, default=0)
+    loans_repaid: Mapped[int] = mapped_column(Integer, default=0)
+    total_borrowed: Mapped[int] = mapped_column(BigInteger, default=0)
+    last_refinance_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     shop_attempts_today: Mapped[int] = mapped_column(Integer, default=0)
     last_shop_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -50,13 +68,6 @@ class User(Base):
     plus_tier: Mapped[str] = mapped_column(String(16), default="free", index=True)
     plus_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     priority_support: Mapped[bool] = mapped_column(Boolean, default=False)
-
-    # ─── Банк 2.0 ───
-    pvp_blocked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
-    loans_count: Mapped[int] = mapped_column(Integer, default=0)
-    loans_repaid: Mapped[int] = mapped_column(Integer, default=0)
-    total_borrowed: Mapped[int] = mapped_column(BigInteger, default=0)
-    last_refinance_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -100,6 +111,7 @@ class UserCard(Base):
     card_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("cards.id", ondelete="CASCADE"), nullable=False, index=True)
 
     is_iw: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_locked: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     serial_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     can_sell_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     acquired_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
@@ -124,11 +136,80 @@ class PvpBattle(Base):
     challenger_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     opponent_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+
     challenger_roll: Mapped[int | None] = mapped_column(Integer, nullable=True)
     opponent_roll: Mapped[int | None] = mapped_column(Integer, nullable=True)
     winner_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
+
+    # PvP 2.0
+    money_stake: Mapped[int] = mapped_column(BigInteger, default=0)
+    season_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("pvp_seasons.id"), nullable=True, index=True)
+    challenger_ready: Mapped[bool] = mapped_column(Boolean, default=False)
+    opponent_ready: Mapped[bool] = mapped_column(Boolean, default=False)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PvpStake(Base):
+    """Ставка карты в PvP."""
+    __tablename__ = "pvp_stakes"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    battle_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("pvp_battles.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    user_card_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("user_cards.id"), nullable=False)
+    side: Mapped[str] = mapped_column(String(16))  # challenger / opponent
+
+
+class PvpSeason(Base):
+    """Сезон PvP."""
+    __tablename__ = "pvp_seasons"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    number: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    starts_at: Mapped[datetime] = mapped_column(DateTime)
+    ends_at: Mapped[datetime] = mapped_column(DateTime)
+
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    is_finished: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+
+    top10_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class SeasonReward(Base):
+    """Награда за сезон."""
+    __tablename__ = "season_rewards"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    season_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("pvp_seasons.id", ondelete="CASCADE"), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    reward_money: Mapped[int] = mapped_column(BigInteger, default=0)
+    reward_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    reward_card_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cards.id"), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    __table_args__ = (UniqueConstraint("season_id", "position", name="uq_season_position"),)
+
+
+class UserSeasonStat(Base):
+    """Итоги игрока за сезон."""
+    __tablename__ = "user_season_stats"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    season_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("pvp_seasons.id", ondelete="CASCADE"), nullable=False)
+
+    final_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    final_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reward_received: Mapped[int] = mapped_column(BigInteger, default=0)
+
+    __table_args__ = (UniqueConstraint("user_id", "season_id", name="uq_user_season"),)
 
 
 class DailyReward(Base):
@@ -185,7 +266,7 @@ class Reward(Base):
 
 
 class PvpReward(Base):
-    """Награда за топ PvP."""
+    """Старая награда (для совместимости)."""
     __tablename__ = "pvp_rewards"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -223,24 +304,19 @@ class Subscription(Base):
     __tablename__ = "subscriptions"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True
-    )
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
     tier: Mapped[str] = mapped_column(String(16), default="free", index=True)
     started_at: Mapped[datetime] = mapped_column(DateTime)
     expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
 
     auto_renew: Mapped[bool] = mapped_column(Boolean, default=False)
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
-
     total_paid_stars: Mapped[int] = mapped_column(Integer, default=0)
     total_paid_coins: Mapped[int] = mapped_column(BigInteger, default=0)
     renewals_count: Mapped[int] = mapped_column(Integer, default=0)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now()
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
 class SubscriptionPayment(Base):
@@ -248,21 +324,15 @@ class SubscriptionPayment(Base):
     __tablename__ = "subscription_payments"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True)
     method: Mapped[str] = mapped_column(String(16))
     amount: Mapped[int] = mapped_column(BigInteger)
     stars_amount: Mapped[int | None] = mapped_column(Integer, nullable=True)
     telegram_payment_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-
     period_start: Mapped[datetime] = mapped_column(DateTime)
     period_end: Mapped[datetime] = mapped_column(DateTime)
-
     is_refunded: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), index=True
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
 
 class PlusReward(Base):
@@ -278,33 +348,21 @@ class PlusReward(Base):
     is_claimed: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
-# ═════════════════════════════════════════════
-# БАНК 2.0 (патч 0.9.0)
-# ═════════════════════════════════════════════
-
 class Loan(Base):
     """Кредит игрока."""
     __tablename__ = "loans"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
-
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True)
     principal: Mapped[int] = mapped_column(BigInteger, nullable=False)
     rate: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
     total_due: Mapped[int] = mapped_column(BigInteger, nullable=False)
     paid: Mapped[int] = mapped_column(BigInteger, default=0)
-
     status: Mapped[str] = mapped_column(String(16), default="active", index=True)
-
     taken_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     due_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     repaid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-    parent_loan_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("loans.id"), nullable=True
-    )
+    parent_loan_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("loans.id"), nullable=True)
 
 
 class LoanPayment(Base):
@@ -312,8 +370,6 @@ class LoanPayment(Base):
     __tablename__ = "loan_payments"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    loan_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("loans.id", ondelete="CASCADE"), index=True
-    )
+    loan_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("loans.id", ondelete="CASCADE"), index=True)
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    paid_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    paid_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now()) 
