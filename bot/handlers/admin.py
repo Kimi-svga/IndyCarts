@@ -1,4 +1,4 @@
-"""Админ-панель: карты, промокоды, рассылка, статистика, баланс, события, редактор, награды."""
+"""Админ-панель: карты, промокоды, рассылка, статистика, баланс, события, редактор, награды, сезоны."""
 
 import asyncio
 import json
@@ -20,7 +20,7 @@ from core.constants import (
     CEILING_MULTIPLIER, FLOOR_MULTIPLIER,
     RARITIES, RARITY_EMOJI, RARITY_NAMES,
 )
-from db.models import Card, PromoCode, PvpReward, Reward, User
+from db.models import Card, PromoCode, PvpReward, PvpSeason, Reward, SeasonReward, User
 from db.session import AsyncSessionLocal
 
 router = Router()
@@ -259,6 +259,9 @@ async def handle_import(message: Message) -> None:
     if message.from_user.id not in settings.OWNER_IDS and message.from_user.id not in settings.ADMIN_IDS:
         return
 
+    if not message.document or not message.document.file_name:
+        return
+
     if not message.document.file_name.endswith(".json"):
         return
 
@@ -382,7 +385,7 @@ async def ap_card(message: Message, state: FSMContext) -> None:
 
 
 # ─────────────────────────────────────────────
-# РАССЫЛКА (с фото)
+# РАССЫЛКА
 # ─────────────────────────────────────────────
 
 @router.callback_query(AdminMenu.filter(F.action == "broadcast"))
@@ -415,9 +418,7 @@ async def do_broadcast(message: Message, state: FSMContext) -> None:
         caption = message.caption or ""
         for uid in users:
             try:
-                await message.bot.send_photo(
-                    uid, file_id, caption=caption, parse_mode="HTML"
-                )
+                await message.bot.send_photo(uid, file_id, caption=caption, parse_mode="HTML")
                 count += 1
                 await asyncio.sleep(0.05)
             except Exception:
@@ -503,12 +504,7 @@ async def cmd_setbalance(message: Message) -> None:
 
 @router.message(Command("event"))
 async def cmd_event(message: Message) -> None:
-    """
-    Событие по одной карте.
-
-    Формат: /event ID_КАРТЫ МОДИФИКАТОР
-    Пример: /event 1 1.2 — карта #1 +20%
-    """
+    """Событие по одной карте: /event ID МОДИФИКАТОР."""
     if message.from_user.id not in settings.OWNER_IDS:
         return
 
@@ -516,8 +512,7 @@ async def cmd_event(message: Message) -> None:
     if len(parts) < 3:
         await message.answer(
             "Формат: <code>/event ID_КАРТЫ МОДИФИКАТОР</code>\n\n"
-            "Пример: <code>/event 1 1.2</code> — карта #1 +20%\n"
-            "Пример: <code>/event 5 0.85</code> — карта #5 -15%",
+            "Пример: <code>/event 1 1.2</code>",
             parse_mode="HTML",
         )
         return
@@ -643,7 +638,6 @@ async def show_card_editor(query: CallbackQuery, card_id: int) -> None:
 
 @router.callback_query(F.data == "ef_price")
 async def ef_price_start(query: CallbackQuery, state: FSMContext) -> None:
-    """Запрашивает цену."""
     await safe_answer(query)
     await state.set_state(EditCard.price)
     await safe_render(query, "💰 Введи новую цену:", get_back_menu())
@@ -651,7 +645,6 @@ async def ef_price_start(query: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(EditCard.price)
 async def ef_price(message: Message, state: FSMContext) -> None:
-    """Обновляет цену."""
     try:
         price = int(message.text.strip())
     except ValueError:
@@ -662,9 +655,7 @@ async def ef_price(message: Message, state: FSMContext) -> None:
     card_id = data["edit_card_id"]
 
     async with AsyncSessionLocal() as session:
-        card = (await session.execute(
-            select(Card).where(Card.id == card_id)
-        )).scalar_one_or_none()
+        card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
         if card is not None:
             card.base_price = price
             card.current_price = price
@@ -678,7 +669,6 @@ async def ef_price(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "ef_weight")
 async def ef_weight_start(query: CallbackQuery, state: FSMContext) -> None:
-    """Запрашивает вес."""
     await safe_answer(query)
     await state.set_state(EditCard.weight)
     await safe_render(query, "⚖️ Введи новый вес:", get_back_menu())
@@ -686,7 +676,6 @@ async def ef_weight_start(query: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(EditCard.weight)
 async def ef_weight(message: Message, state: FSMContext) -> None:
-    """Обновляет вес."""
     try:
         weight = int(message.text.strip())
     except ValueError:
@@ -697,9 +686,7 @@ async def ef_weight(message: Message, state: FSMContext) -> None:
     card_id = data["edit_card_id"]
 
     async with AsyncSessionLocal() as session:
-        card = (await session.execute(
-            select(Card).where(Card.id == card_id)
-        )).scalar_one_or_none()
+        card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
         if card is not None:
             card.drop_weight = weight
             await session.commit()
@@ -710,7 +697,6 @@ async def ef_weight(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "ef_supply")
 async def ef_supply_start(query: CallbackQuery, state: FSMContext) -> None:
-    """Запрашивает тираж."""
     await safe_answer(query)
     await state.set_state(EditCard.supply)
     await safe_render(query, "📜 Введи лимит (0 = без лимита):", get_back_menu())
@@ -718,7 +704,6 @@ async def ef_supply_start(query: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(EditCard.supply)
 async def ef_supply(message: Message, state: FSMContext) -> None:
-    """Обновляет тираж."""
     try:
         supply = int(message.text.strip())
     except ValueError:
@@ -729,9 +714,7 @@ async def ef_supply(message: Message, state: FSMContext) -> None:
     card_id = data["edit_card_id"]
 
     async with AsyncSessionLocal() as session:
-        card = (await session.execute(
-            select(Card).where(Card.id == card_id)
-        )).scalar_one_or_none()
+        card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
         if card is not None:
             card.max_supply = supply if supply > 0 else None
             await session.commit()
@@ -742,7 +725,6 @@ async def ef_supply(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "ef_image")
 async def ef_image_start(query: CallbackQuery, state: FSMContext) -> None:
-    """Запрашивает фото."""
     await safe_answer(query)
     await state.set_state(EditCard.image)
     await safe_render(query, "🖼 Отправь фото или <code>skip</code>", get_back_menu())
@@ -750,15 +732,12 @@ async def ef_image_start(query: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(EditCard.image, F.photo)
 async def ef_image(message: Message, state: FSMContext) -> None:
-    """Обновляет фото."""
     file_id = message.photo[-1].file_id
     data = await state.get_data()
     card_id = data["edit_card_id"]
 
     async with AsyncSessionLocal() as session:
-        card = (await session.execute(
-            select(Card).where(Card.id == card_id)
-        )).scalar_one_or_none()
+        card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
         if card is not None:
             card.image_file_id = file_id
             await session.commit()
@@ -769,14 +748,11 @@ async def ef_image(message: Message, state: FSMContext) -> None:
 
 @router.message(EditCard.image, F.text == "skip")
 async def ef_image_skip(message: Message, state: FSMContext) -> None:
-    """Удаляет фото."""
     data = await state.get_data()
     card_id = data["edit_card_id"]
 
     async with AsyncSessionLocal() as session:
-        card = (await session.execute(
-            select(Card).where(Card.id == card_id)
-        )).scalar_one_or_none()
+        card = (await session.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
         if card is not None:
             card.image_file_id = None
             await session.commit()
@@ -855,8 +831,7 @@ async def cmd_setpvpreward(message: Message) -> None:
     if len(parts) < 4:
         await message.answer(
             "Формат: <code>/setpvpreward позиция деньги попытки [ID карты]</code>\n\n"
-            "Пример: <code>/setpvpreward 1 50000 50 42</code>\n"
-            "Без карты: <code>/setpvpreward 5 10000 10</code>",
+            "Пример: <code>/setpvpreward 1 50000 50 42</code>",
             parse_mode="HTML",
         )
         return
@@ -894,7 +869,11 @@ async def cmd_setpvpreward(message: Message) -> None:
     )
 
 
-    @router.message(Command("setseasonreward"))
+# ─────────────────────────────────────────────
+# НАГРАДЫ ЗА СЕЗОН (1.0.0)
+# ─────────────────────────────────────────────
+
+@router.message(Command("setseasonreward"))
 async def cmd_setseasonreward(message: Message) -> None:
     """
     Формат: /setseasonreward POSITION MONEY ATTEMPTS [CARD_ID] [TITLE]
@@ -926,14 +905,11 @@ async def cmd_setseasonreward(message: Message) -> None:
 
     if rest:
         if " " in rest or not rest.isdigit():
-            # title
             title = rest.strip().strip('"').strip("'")
         else:
             card_id = int(rest)
 
     async with AsyncSessionLocal() as session:
-        from db.models import PvpSeason, SeasonReward
-
         season = (await session.execute(
             select(PvpSeason).where(PvpSeason.is_active == True)
         )).scalar_one_or_none()
@@ -968,4 +944,4 @@ async def cmd_setseasonreward(message: Message) -> None:
         f"🎴 {attempts} попыток\n"
         f"🎁 Карта: #{card_id if card_id else '—'}\n"
         f"🏅 Титул: {title or '—'}"
-        )
+    )
