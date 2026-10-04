@@ -892,3 +892,80 @@ async def cmd_setpvpreward(message: Message) -> None:
         f"💰 {money} монет\n"
         f"🎴 {attempts} попыток{card_text}"
     )
+
+
+    @router.message(Command("setseasonreward"))
+async def cmd_setseasonreward(message: Message) -> None:
+    """
+    Формат: /setseasonreward POSITION MONEY ATTEMPTS [CARD_ID] [TITLE]
+    Пример: /setseasonreward 1 100000 50 42 "👑 Чемпион"
+    """
+    if message.from_user.id not in settings.OWNER_IDS:
+        return
+
+    parts = message.text.split(maxsplit=5)
+    if len(parts) < 4:
+        await message.answer(
+            "Формат: <code>/setseasonreward POSITION MONEY ATTEMPTS [CARD_ID] [TITLE]</code>\n\n"
+            "Пример: <code>/setseasonreward 1 100000 50 42 \"👑 Чемпион\"</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    try:
+        position = int(parts[1])
+        money = int(parts[2])
+        attempts = int(parts[3])
+    except ValueError:
+        await message.answer("❌ Позиция, деньги, попытки — числа")
+        return
+
+    card_id = None
+    title = None
+    rest = parts[4] if len(parts) > 4 else ""
+
+    if rest:
+        if " " in rest or not rest.isdigit():
+            # title
+            title = rest.strip().strip('"').strip("'")
+        else:
+            card_id = int(rest)
+
+    async with AsyncSessionLocal() as session:
+        from db.models import PvpSeason, SeasonReward
+
+        season = (await session.execute(
+            select(PvpSeason).where(PvpSeason.is_active == True)
+        )).scalar_one_or_none()
+
+        if season is None:
+            await message.answer("❌ Нет активного сезона")
+            return
+
+        old = (await session.execute(
+            select(SeasonReward).where(
+                SeasonReward.season_id == season.id,
+                SeasonReward.position == position,
+            )
+        )).scalar_one_or_none()
+
+        if old:
+            await session.delete(old)
+
+        session.add(SeasonReward(
+            season_id=season.id,
+            position=position,
+            reward_money=money,
+            reward_attempts=attempts,
+            reward_card_id=card_id,
+            title=title,
+        ))
+        await session.commit()
+
+    await message.answer(
+        f"✅ Награда для топ-{position}:\n"
+        f"💰 {money:,} монет\n"
+        f"🎴 {attempts} попыток\n"
+        f"🎁 Карта: #{card_id if card_id else '—'}\n"
+        f"🏅 Титул: {title or '—'}"
+        )
