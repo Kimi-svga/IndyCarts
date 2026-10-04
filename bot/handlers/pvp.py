@@ -37,7 +37,9 @@ class PvpBet(CallbackData, prefix="pvpbet"):
     user_card_id: int
 
 
-# ─── Меню PvP ───
+# ═════════════════════════════════════════════
+# МЕНЮ PVP
+# ═════════════════════════════════════════════
 
 @router.callback_query(MainMenu.filter(F.action == "pvp"))
 async def cb_pvp(query: CallbackQuery) -> None:
@@ -82,20 +84,21 @@ async def cb_pvp(query: CallbackQuery) -> None:
         f"📊 Всего: <b>{user.pvp_wins_total}W / {user.pvp_losses_total}L</b>\n\n"
         f"━━━━━━━━━━━━━━━━━━\n\n"
         f"<b>Ставка:</b> до {settings.PVP_MAX_STAKES_PER_SIDE} карт с каждой стороны\n"
-        f"<b>Деньги:</b> опционально\n"
+        f"<b>Деньги:</b> {settings.PVP_FEE} монет с каждого\n"
         f"<b>Комиссия игры:</b> {int(settings.PVP_BANK_COMMISSION * 100)}%\n\n"
         f"Вызови игрока: <code>/duel @username</code>"
     )
 
     b = InlineKeyboardBuilder()
-    b.button(text="🎲 Быстрый бой (10 монет)", callback_data="pvp_quick")
     b.button(text="🔙 Назад", callback_data=MainMenu(action="back"))
     b.adjust(1)
 
     await safe_render(query, text, b.as_markup())
 
 
-# ─── Вызов на дуэль ───
+# ═════════════════════════════════════════════
+# ВЫЗОВ НА ДУЭЛЬ
+# ═════════════════════════════════════════════
 
 @router.message(Command("duel"))
 async def cmd_duel(message: Message) -> None:
@@ -129,6 +132,10 @@ async def cmd_duel(message: Message) -> None:
             await message.answer("🚫 Ты в PvP-блоке")
             return
 
+        if challenger.balance < settings.PVP_FEE:
+            await message.answer(f"❌ Нужно {settings.PVP_FEE} монет")
+            return
+
         # Активный сезон
         season = (await session.execute(
             select(PvpSeason).where(PvpSeason.is_active == True)
@@ -148,31 +155,57 @@ async def cmd_duel(message: Message) -> None:
         opponent_tg = opponent.telegram_id
         challenger_name = challenger.username
 
-    b = InlineKeyboardBuilder()
-    b.button(text="✅ Принять", callback_data=PvpAction(action="choose", battle_id=battle_id).pack())
-    b.button(text="❌ Отклонить", callback_data=PvpAction(action="decline", battle_id=battle_id).pack())
-    b.adjust(2)
+    # ── Уведомление OPPONENT ──
+    b_opp = InlineKeyboardBuilder()
+    b_opp.button(
+        text="✅ Принять",
+        callback_data=PvpAction(action="choose", battle_id=battle_id).pack(),
+    )
+    b_opp.button(
+        text="❌ Отклонить",
+        callback_data=PvpAction(action="decline", battle_id=battle_id).pack(),
+    )
+    b_opp.adjust(2)
 
     try:
         await message.bot.send_message(
             opponent_tg,
             f"⚔️ <b>Вызов на PvP!</b>\n\n"
             f"От: <b>@{challenger_name}</b>\n\n"
-            f"Выбери свои карты для ставки.",
-            reply_markup=b.as_markup(),
+            f"Принять вызов?",
+            reply_markup=b_opp.as_markup(),
             parse_mode="HTML",
         )
-    except Exception:
+    except Exception as e:
+        logger.error(f"Не удалось отправить вызов: {e}")
         await message.answer("❌ Не удалось отправить вызов")
+        return
 
-    await message.answer(f"⚔️ Вызов отправлен @{target}!")
+    # ── Уведомление CHALLENGER (с кнопкой выбора карт) ──
+    b_ch = InlineKeyboardBuilder()
+    b_ch.button(
+        text="🎴 Выбрать свои карты",
+        callback_data=PvpAction(action="choose", battle_id=battle_id).pack(),
+    )
+    b_ch.adjust(1)
+
+    await message.answer(
+        f"⚔️ <b>Вызов отправлен @{target}</b>\n\n"
+        f"Пока противник думает — выбери свои карты.",
+        reply_markup=b_ch.as_markup(),
+        parse_mode="HTML",
+    )
 
 
-# ─── Отклонение ───
+# ═════════════════════════════════════════════
+# ОТКЛОНЕНИЕ
+# ═════════════════════════════════════════════
 
 @router.callback_query(PvpAction.filter(F.action == "decline"))
 async def cb_pvp_decline(query: CallbackQuery, callback_data: PvpAction) -> None:
     await safe_answer(query, "❌ Отклонено")
+
+    challenger_tg = None
 
     async with AsyncSessionLocal() as session:
         battle = (await session.execute(
@@ -181,7 +214,18 @@ async def cb_pvp_decline(query: CallbackQuery, callback_data: PvpAction) -> None
 
         if battle:
             battle.status = "declined"
+
+            # Разблокировать все карты
+            stakes = (await session.execute(
+                select(PvpStake).where(PvpStake.battle_id == battle.id)
+            )).scalars().all()
+            for stake in stakes:
+                uc = await session.get(UserCard, stake.user_card_id)
+                if uc:
+                    uc.is_locked = False
+
             await session.commit()
+
             challenger = await session.get(User, battle.challenger_id)
             challenger_tg = challenger.telegram_id if challenger else None
 
@@ -198,7 +242,9 @@ async def cb_pvp_decline(query: CallbackQuery, callback_data: PvpAction) -> None
             pass
 
 
-# ─── Выбор карт (opponent) ───
+# ═════════════════════════════════════════════
+# ВЫБОР КАРТ
+# ═════════════════════════════════════════════
 
 @router.callback_query(PvpAction.filter(F.action == "choose"))
 async def cb_pvp_choose(query: CallbackQuery, callback_data: PvpAction) -> None:
@@ -216,6 +262,23 @@ async def _show_card_picker(query: CallbackQuery, battle_id: int, index: int) ->
         if user is None:
             return
 
+        # Проверяем, что бой существует и пользователь — участник
+        battle = (await session.execute(
+            select(PvpBattle).where(PvpBattle.id == battle_id)
+        )).scalar_one_or_none()
+
+        if battle is None:
+            await safe_render(query, "❌ Бой не найден", get_back_menu())
+            return
+
+        if user.id not in (battle.challenger_id, battle.opponent_id):
+            await safe_render(query, "❌ Ты не участник боя", get_back_menu())
+            return
+
+        if battle.status != "pending":
+            await safe_render(query, "❌ Бой уже завершён", get_back_menu())
+            return
+
         stmt = (
             select(UserCard, Card)
             .join(Card, UserCard.card_id == Card.id)
@@ -228,7 +291,6 @@ async def _show_card_picker(query: CallbackQuery, battle_id: int, index: int) ->
         )
         rows = (await session.execute(stmt)).all()
 
-        # Уже выбранные
         chosen = (await session.execute(
             select(PvpStake).where(
                 PvpStake.battle_id == battle_id,
@@ -270,8 +332,14 @@ async def _show_card_picker(query: CallbackQuery, battle_id: int, index: int) ->
     else:
         b.button(text="➕ Поставить", callback_data=f"pvptog_{battle_id}_{user_card.id}")
 
-    b.button(text="✅ Готов", callback_data=PvpAction(action="ready", battle_id=battle_id).pack())
-    b.button(text="🔙 Отмена", callback_data=PvpAction(action="decline", battle_id=battle_id).pack())
+    b.button(
+        text="✅ Готов",
+        callback_data=PvpAction(action="ready", battle_id=battle_id).pack(),
+    )
+    b.button(
+        text="🔙 Отмена",
+        callback_data=PvpAction(action="decline", battle_id=battle_id).pack(),
+    )
     b.adjust(3, 1, 1, 1)
 
     await safe_render(query, text, b.as_markup(), photo_file_id=card.image_file_id)
@@ -300,7 +368,7 @@ async def cb_pvp_toggle(query: CallbackQuery) -> None:
             return
 
         battle = await session.get(PvpBattle, battle_id)
-        if battle is None:
+        if battle is None or battle.status != "pending":
             return
 
         side = "challenger" if battle.challenger_id == user.id else "opponent"
@@ -315,7 +383,6 @@ async def cb_pvp_toggle(query: CallbackQuery) -> None:
 
         if existing:
             await session.delete(existing)
-            # Разблокировать
             uc = await session.get(UserCard, user_card_id)
             if uc:
                 uc.is_locked = False
@@ -329,10 +396,13 @@ async def cb_pvp_toggle(query: CallbackQuery) -> None:
             )).scalars().all()
 
             if len(count) >= settings.PVP_MAX_STAKES_PER_SIDE:
-                await safe_answer(query, f"❌ Максимум {settings.PVP_MAX_STAKES_PER_SIDE} карт", show_alert=True)
+                await safe_answer(
+                    query,
+                    f"❌ Максимум {settings.PVP_MAX_STAKES_PER_SIDE} карт",
+                    show_alert=True,
+                )
                 return
 
-            # Проверка, что карта у игрока
             uc = (await session.execute(
                 select(UserCard).where(
                     UserCard.id == user_card_id,
@@ -357,12 +427,16 @@ async def cb_pvp_toggle(query: CallbackQuery) -> None:
     await _show_card_picker(query, battle_id, 0)
 
 
-# ─── Готовность ───
+# ═════════════════════════════════════════════
+# ГОТОВНОСТЬ
+# ═════════════════════════════════════════════
 
 @router.callback_query(PvpAction.filter(F.action == "ready"))
 async def cb_pvp_ready(query: CallbackQuery, callback_data: PvpAction) -> None:
     await safe_answer(query)
     battle_id = callback_data.battle_id
+
+    should_run = False
 
     async with AsyncSessionLocal() as session:
         user = (await session.execute(
@@ -383,14 +457,14 @@ async def cb_pvp_ready(query: CallbackQuery, callback_data: PvpAction) -> None:
         side = "challenger" if battle.challenger_id == user.id else "opponent"
 
         # Сколько карт выбрал?
-        count = (await session.execute(
+        stakes = (await session.execute(
             select(PvpStake).where(
                 PvpStake.battle_id == battle_id,
                 PvpStake.user_id == user.id,
             )
         )).scalars().all()
 
-        if not count:
+        if not stakes:
             await safe_answer(query, "❌ Выбери хотя бы 1 карту", show_alert=True)
             return
 
@@ -399,122 +473,162 @@ async def cb_pvp_ready(query: CallbackQuery, callback_data: PvpAction) -> None:
         else:
             battle.opponent_ready = True
 
-        # Оба готовы — бой
+        # Оба готовы?
         if battle.challenger_ready and battle.opponent_ready:
-            await _run_battle(session, battle)
-            await session.commit()
-            await safe_render(query, "⚔️ Бой запущен!", get_back_menu())
-        else:
-            await session.commit()
+            should_run = True
+
+        await session.commit()
+
+        if not should_run:
             await safe_render(
                 query,
-                "✅ Готов! Ждём противника...",
+                "✅ <b>Ты готов!</b>\n\n⏳ Ждём противника...",
                 get_back_menu(),
             )
+            return
+
+    # ── Бой запускается ──
+    if should_run:
+        await safe_render(
+            query,
+            "⚔️ <b>Бой начинается!</b>\n\nСмотри результат...",
+            get_back_menu(),
+        )
+        await _run_battle_async(battle_id, query.bot)
 
 
-# ─── Автоматический бой ───
+# ═════════════════════════════════════════════
+# АВТОМАТИЧЕСКИЙ БОЙ
+# ═════════════════════════════════════════════
 
-async def _run_battle(session, battle: PvpBattle) -> None:
-    """Автоматически проводит бой."""
-    challenger = await session.get(User, battle.challenger_id)
-    opponent = await session.get(User, battle.opponent_id)
+async def _run_battle_async(battle_id: int, bot) -> None:
+    """Проводит бой и рассылает результаты."""
+    async with AsyncSessionLocal() as session:
+        battle = (await session.execute(
+            select(PvpBattle).where(PvpBattle.id == battle_id)
+        )).scalar_one_or_none()
 
-    if challenger is None or opponent is None:
-        return
+        if battle is None or battle.status != "pending":
+            return
 
-    # Кубы
-    cr = random.randint(1, 6) + random.randint(1, 6)
-    orr = random.randint(1, 6) + random.randint(1, 6)
-    while cr == orr:
+        challenger = await session.get(User, battle.challenger_id)
+        opponent = await session.get(User, battle.opponent_id)
+
+        if challenger is None or opponent is None:
+            return
+
+        # Кубы
         cr = random.randint(1, 6) + random.randint(1, 6)
         orr = random.randint(1, 6) + random.randint(1, 6)
+        while cr == orr:
+            cr = random.randint(1, 6) + random.randint(1, 6)
+            orr = random.randint(1, 6) + random.randint(1, 6)
 
-    winner, loser = (challenger, opponent) if cr > orr else (opponent, challenger)
+        winner, loser = (challenger, opponent) if cr > orr else (opponent, challenger)
 
-    # Эло + Indy+
-    elo = calculate_elo(winner.pvp_rating, loser.pvp_rating)
-    winner_delta = elo.winner_delta
-    loser_delta = elo.loser_delta
+        # Эло
+        elo = calculate_elo(winner.pvp_rating, loser.pvp_rating)
+        winner_delta = elo.winner_delta
+        loser_delta = elo.loser_delta
 
-    if winner.plus_tier == "indy_plus":
-        winner_delta = int(winner_delta * settings.PLUS_PVP_MULTIPLIER)
-    if loser.plus_tier == "indy_plus":
-        loser_delta = int(loser_delta / settings.PLUS_PVP_MULTIPLIER)
+        # Indy+ множитель
+        if winner.plus_tier == "indy_plus":
+            winner_delta = int(winner_delta * settings.PLUS_PVP_MULTIPLIER)
+        if loser.plus_tier == "indy_plus":
+            loser_delta = int(loser_delta / settings.PLUS_PVP_MULTIPLIER)
 
-    winner.pvp_rating += winner_delta
-    loser.pvp_rating += loser_delta
-    if loser.pvp_rating < 100:
-        loser.pvp_rating = 100
+        winner.pvp_rating += winner_delta
+        loser.pvp_rating += loser_delta
+        if loser.pvp_rating < 100:
+            loser.pvp_rating = 100
 
-    # Счётчики
-    winner.pvp_wins += 1
-    winner.pvp_wins_total += 1
-    loser.pvp_losses += 1
-    loser.pvp_losses_total += 1
+        winner.pvp_wins += 1
+        winner.pvp_wins_total += 1
+        loser.pvp_losses += 1
+        loser.pvp_losses_total += 1
 
-    # Ставки: карты проигравшего → победителю
-    loser_side = "challenger" if loser.id == battle.challenger_id else "opponent"
-    stakes = (await session.execute(
-        select(PvpStake).where(
-            PvpStake.battle_id == battle.id,
-            PvpStake.side == loser_side,
+        # Карты: у проигравшего → победителю
+        loser_side = "challenger" if loser.id == battle.challenger_id else "opponent"
+        loser_stakes = (await session.execute(
+            select(PvpStake).where(
+                PvpStake.battle_id == battle.id,
+                PvpStake.side == loser_side,
+            )
+        )).scalars().all()
+
+        cards_transferred = 0
+        for stake in loser_stakes:
+            uc = await session.get(UserCard, stake.user_card_id)
+            if uc:
+                uc.user_id = winner.id
+                uc.is_locked = False
+                cards_transferred += 1
+
+        # Свои карты победителя разблокировать
+        winner_side = "challenger" if winner.id == battle.challenger_id else "opponent"
+        winner_stakes = (await session.execute(
+            select(PvpStake).where(
+                PvpStake.battle_id == battle.id,
+                PvpStake.side == winner_side,
+            )
+        )).scalars().all()
+
+        for stake in winner_stakes:
+            uc = await session.get(UserCard, stake.user_card_id)
+            if uc:
+                uc.is_locked = False
+
+        # Деньги
+        money_prize = calculate_pvp_money_prize(
+            battle.money_stake, battle.money_stake,
+            commission=settings.PVP_BANK_COMMISSION,
         )
-    )).scalars().all()
+        winner.balance += money_prize
+        loser.balance -= battle.money_stake
 
-    cards_transferred = 0
-    for stake in stakes:
-        uc = await session.get(UserCard, stake.user_card_id)
-        if uc:
-            uc.user_id = winner.id
-            uc.is_locked = False
-            cards_transferred += 1
+        winner.pvp_money_won += money_prize
+        winner.pvp_money_staked += battle.money_stake
+        loser.pvp_money_staked += battle.money_stake
 
-    # Свои разблокировать
-    winner_side = "challenger" if winner.id == battle.challenger_id else "opponent"
-    winner_stakes = (await session.execute(
-        select(PvpStake).where(
-            PvpStake.battle_id == battle.id,
-            PvpStake.side == winner_side,
-        )
-    )).scalars().all()
+        # Финал
+        battle.status = "finished"
+        battle.challenger_roll = cr
+        battle.opponent_roll = orr
+        battle.winner_id = winner.id
+        battle.finished_at = datetime.utcnow()
 
-    for stake in winner_stakes:
-        uc = await session.get(UserCard, stake.user_card_id)
-        if uc:
-            uc.is_locked = False
+        # Данные для сообщений
+        c_name = challenger.username
+        o_name = opponent.username
+        w_name = winner.username
+        challenger_tg = challenger.telegram_id
+        opponent_tg = opponent.telegram_id
+        winner_id = winner.id
 
-    # Деньги
-    winner.balance += battle.money_stake * 2
-    loser.balance -= battle.money_stake
+        await session.commit()
 
-    battle.status = "finished"
-    battle.challenger_roll = cr
-    battle.opponent_roll = orr
-    battle.winner_id = winner.id
-    battle.finished_at = datetime.utcnow()
-
-    # Уведомления
-    text = (
-        f"⚔️ <b>Дуэль!</b>\n\n"
-        f"🎲 @{challenger.username}: {cr}\n"
-        f"🎲 @{opponent.username}: {orr}\n\n"
-        f"🏆 Победитель: <b>@{winner.username}</b>\n"
+    # ── Уведомления ──
+    result_text = (
+        f"⚔️ <b>Дуэль завершена!</b>\n\n"
+        f"🎲 @{c_name}: <b>{cr}</b>\n"
+        f"🎲 @{o_name}: <b>{orr}</b>\n\n"
+        f"🏆 Победитель: <b>@{w_name}</b>\n"
         f"🃏 Забрал карт: <b>{cards_transferred}</b>\n"
-        f"💰 Деньги: <b>+{battle.money_stake}</b>\n"
+        f"💰 Выиграл: <b>+{money_prize}</b> монет\n"
         f"📈 Рейтинг: <b>+{winner_delta}</b> / <b>{loser_delta}</b>"
     )
 
-    for uid in (challenger.telegram_id, opponent.telegram_id):
+    for uid in (challenger_tg, opponent_tg):
         try:
-            # отправим через bot — но у нас только session
-            pass
-        except Exception:
-            pass
+            await bot.send_message(uid, result_text, parse_mode="HTML")
+        except Exception as e:
+            logger.error(f"Не удалось отправить результат боя: {e}")
 
 
-# ─── Быстрый бой ───
+# ═════════════════════════════════════════════
+# СЛУЖЕБНЫЕ
+# ═════════════════════════════════════════════
 
-@router.callback_query(F.data == "pvp_quick")
-async def cb_pvp_quick(query: CallbackQuery) -> None:
-    await safe_answer(query, "🚧 В разработке", show_alert=True) 
+@router.callback_query(F.data == "noop")
+async def cb_noop(query: CallbackQuery) -> None:
+    await safe_answer(query) 
