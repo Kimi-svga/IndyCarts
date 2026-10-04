@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger, Boolean, Date, DateTime, ForeignKey,
-    Integer, String, Text, UniqueConstraint, func,
+    Integer, Numeric, String, Text, UniqueConstraint, func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -13,6 +13,10 @@ class Base(DeclarativeBase):
     """Базовый класс моделей."""
     pass
 
+
+# ─────────────────────────────────────────────
+# USERS
+# ─────────────────────────────────────────────
 
 class User(Base):
     """Игрок."""
@@ -47,10 +51,19 @@ class User(Base):
     referred_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     referral_count: Mapped[int] = mapped_column(Integer, default=0)
 
+    # ─── Indy+ (патч 0.8.0) ───
+    plus_tier: Mapped[str] = mapped_column(String(16), default="free", index=True)
+    plus_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    priority_support: Mapped[bool] = mapped_column(Boolean, default=False)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
 
+
+# ─────────────────────────────────────────────
+# CARDS
+# ─────────────────────────────────────────────
 
 class Card(Base):
     """Шаблон карты."""
@@ -73,10 +86,17 @@ class Card(Base):
     max_supply: Mapped[int | None] = mapped_column(Integer, nullable=True)
     issued: Mapped[int] = mapped_column(Integer, default=0)
 
+    # ─── Indy+ (патч 0.8.0) ───
+    is_plus_only: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     created_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
+
+# ─────────────────────────────────────────────
+# USER CARDS
+# ─────────────────────────────────────────────
 
 class UserCard(Base):
     """Карта у игрока."""
@@ -93,6 +113,10 @@ class UserCard(Base):
     acquired_price: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
 
+# ─────────────────────────────────────────────
+# PRICE HISTORY
+# ─────────────────────────────────────────────
+
 class PriceHistory(Base):
     """История цен."""
     __tablename__ = "price_history"
@@ -102,6 +126,10 @@ class PriceHistory(Base):
     price: Mapped[int] = mapped_column(BigInteger, nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
+
+# ─────────────────────────────────────────────
+# PVP
+# ─────────────────────────────────────────────
 
 class PvpBattle(Base):
     """Дуэль."""
@@ -118,6 +146,10 @@ class PvpBattle(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+# ─────────────────────────────────────────────
+# DAILY REWARDS
+# ─────────────────────────────────────────────
+
 class DailyReward(Base):
     """Ежедневная награда."""
     __tablename__ = "daily_rewards"
@@ -131,6 +163,10 @@ class DailyReward(Base):
 
     __table_args__ = (UniqueConstraint("user_id", "reward_date", name="uq_daily_user_date"),)
 
+
+# ─────────────────────────────────────────────
+# PROMOCODES
+# ─────────────────────────────────────────────
 
 class PromoCode(Base):
     """Промокод."""
@@ -159,6 +195,10 @@ class PromoActivation(Base):
     __table_args__ = (UniqueConstraint("promo_id", "user_id", name="uq_promo_user"),)
 
 
+# ─────────────────────────────────────────────
+# REWARDS
+# ─────────────────────────────────────────────
+
 class Reward(Base):
     """Награда за топ по балансу."""
     __tablename__ = "rewards"
@@ -183,6 +223,10 @@ class PvpReward(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+# ─────────────────────────────────────────────
+# ADMIN ROLES
+# ─────────────────────────────────────────────
+
 class AdminRole(Base):
     """Роль админа."""
     __tablename__ = "admin_roles"
@@ -194,6 +238,10 @@ class AdminRole(Base):
     appointed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+# ─────────────────────────────────────────────
+# REFERRALS
+# ─────────────────────────────────────────────
+
 class Referral(Base):
     """Реферальная связь."""
     __tablename__ = "referrals"
@@ -202,4 +250,72 @@ class Referral(Base):
     referrer_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     referred_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
     rewarded: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now()) 
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+# ═════════════════════════════════════════════
+# Indy+ ПОДПИСКА (патч 0.8.0)
+# ═════════════════════════════════════════════
+
+class Subscription(Base):
+    """Подписка Indy+."""
+    __tablename__ = "subscriptions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True
+    )
+
+    tier: Mapped[str] = mapped_column(String(16), default="free", index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+    auto_renew: Mapped[bool] = mapped_column(Boolean, default=False)
+    payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    total_paid_stars: Mapped[int] = mapped_column(Integer, default=0)
+    total_paid_coins: Mapped[int] = mapped_column(BigInteger, default=0)
+    renewals_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class SubscriptionPayment(Base):
+    """История платежей Indy+."""
+    __tablename__ = "subscription_payments"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+
+    method: Mapped[str] = mapped_column(String(16))
+    amount: Mapped[int] = mapped_column(BigInteger)
+    stars_amount: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    telegram_payment_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    period_start: Mapped[datetime] = mapped_column(DateTime)
+    period_end: Mapped[datetime] = mapped_column(DateTime)
+
+    is_refunded: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), index=True
+    )
+
+
+class PlusReward(Base):
+    """Ежемесячная награда подписчикам."""
+    __tablename__ = "plus_rewards"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    month: Mapped[str] = mapped_column(String(7), unique=True)
+    card_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("cards.id"), nullable=True
+    )
+    money: Mapped[int] = mapped_column(BigInteger, default=0)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    title: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    is_claimed: Mapped[bool] = mapped_column(Boolean, default=False)
