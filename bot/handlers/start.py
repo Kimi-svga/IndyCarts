@@ -13,6 +13,7 @@ from aiogram.types import (
 from sqlalchemy import select
 
 from bot.keyboards.main import MainMenu, get_main_menu
+from bot.utils.main_menu import build_main_menu_text
 from bot.utils.stable import safe_answer, safe_render
 from core.config import settings
 from core.constants import RESERVED_USERNAMES, USERNAME_PATTERN
@@ -48,27 +49,23 @@ def subscribe_keyboard() -> InlineKeyboardMarkup:
 
 
 @router.message(CommandStart(deep_link=True))
-async def cmd_start_deeplink(message: Message, command: CommandObject, state: FSMContext) -> None:
-    """
-    Обработка /start с реферальной ссылкой.
-
-    Aiogram 3 передаёт параметр через command.args [citation:1][citation:2].
-    """
+async def cmd_start_deeplink(
+    message: Message,
+    command: CommandObject,
+    state: FSMContext,
+) -> None:
+    """Обработка /start с реферальной ссылкой."""
     payload = command.args
     logger.info(f"Deep link payload: {payload}")
 
     referrer_id = None
     if payload:
         try:
-            # Пробуем распарсить как int (ссылка вида ref_123)
             if payload.startswith("ref_"):
                 referrer_id = int(payload.replace("ref_", ""))
             else:
-                # Пробуем напрямую
                 referrer_id = int(payload)
-            logger.info(f"Referrer ID: {referrer_id}")
-        except (ValueError, AttributeError) as e:
-            logger.warning(f"Не удалось распарсить payload: {e}")
+        except (ValueError, AttributeError):
             referrer_id = None
 
     await _start_logic(message, state, referrer_id)
@@ -80,7 +77,11 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     await _start_logic(message, state, None)
 
 
-async def _start_logic(message: Message, state: FSMContext, referrer_id: int | None) -> None:
+async def _start_logic(
+    message: Message,
+    state: FSMContext,
+    referrer_id: int | None,
+) -> None:
     """Общая логика /start."""
     if not await is_subscribed(message.bot, message.from_user.id):
         await message.answer(
@@ -98,11 +99,13 @@ async def _start_logic(message: Message, state: FSMContext, referrer_id: int | N
         )).scalar_one_or_none()
 
     if user is not None:
+        async with AsyncSessionLocal() as session:
+            text = await build_main_menu_text(user, session)
         await message.answer(
-            f"🏁 С возвращением, <b>{user.username}</b>!\n\n"
-            f"💰 Баланс: {user.balance}\n"
-            f"🎴 Попытки: {user.daily_attempts}",
-            reply_markup=get_main_menu(is_owner=message.from_user.id in settings.OWNER_IDS),
+            text,
+            reply_markup=get_main_menu(
+                is_owner=message.from_user.id in settings.OWNER_IDS
+            ),
             parse_mode="HTML",
         )
         return
@@ -131,9 +134,11 @@ async def cb_check_sub(query: CallbackQuery, state: FSMContext) -> None:
         )).scalar_one_or_none()
 
     if user is not None:
+        async with AsyncSessionLocal() as session:
+            text = await build_main_menu_text(user, session)
         await safe_render(
             query,
-            f"🏁 С возвращением, <b>{user.username}</b>!",
+            text,
             get_main_menu(is_owner=query.from_user.id in settings.OWNER_IDS),
         )
         return
@@ -224,27 +229,21 @@ async def handle_username(message: Message, state: FSMContext) -> None:
                         pass
 
     await state.clear()
+
+    # Приветствие
     await message.answer(
         f"✅ <b>@{username}</b>, ты в игре!\n\n"
         f"💰 {settings.DAILY_MONEY} монет\n"
         f"🎴 {settings.DAILY_ATTEMPTS} попытки{ref_text}",
-        reply_markup=get_main_menu(is_owner=message.from_user.id in settings.OWNER_IDS),
         parse_mode="HTML",
     )
+
+    # Главное меню
+    from bot.handlers.menu import show_main_menu
+    await show_main_menu(message)
 
 
 @router.message(RegState.waiting_username)
 async def handle_bad_username(message: Message) -> None:
     """Неверный формат ника."""
-    await message.answer("❌ Ник должен быть 3–20 символов, латиница, начинаться с буквы.")
-
-
-@router.callback_query(MainMenu.filter(F.action == "back"))
-async def cb_back(query: CallbackQuery) -> None:
-    """Возврат в главное меню."""
-    await safe_answer(query)
-    await safe_render(
-        query,
-        "🏁 <b>Главное меню</b>",
-        get_main_menu(is_owner=query.from_user.id in settings.OWNER_IDS),
-    )
+    await message.answer("❌ Ник должен быть 3–20 символов, латиница, начинаться с буквы.") 
