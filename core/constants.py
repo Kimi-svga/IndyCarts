@@ -8,7 +8,10 @@ RARITY_LEGENDARY = "legendary"
 RARITY_LIMITED = "limited"
 RARITY_SEASON = "season"
 
-RARITIES = [RARITY_BASIC, RARITY_RARE, RARITY_EPIC, RARITY_MYTHIC, RARITY_LEGENDARY, RARITY_LIMITED, RARITY_SEASON]
+RARITIES = [
+    RARITY_BASIC, RARITY_RARE, RARITY_EPIC, RARITY_MYTHIC,
+    RARITY_LEGENDARY, RARITY_LIMITED, RARITY_SEASON,
+]
 
 RARITY_NAMES = {
     RARITY_BASIC: "Basic",
@@ -76,3 +79,30 @@ RESERVED_USERNAMES = {
 }
 
 USERNAME_PATTERN = r"^[A-Za-z][A-Za-z0-9_]{2,19}$"
+
+
+# ─────────────────────────────────────────────
+# UI · Главное меню (патч 0.7.0)
+# ─────────────────────────────────────────────
+
+MAIN_MENU_TITLE = "🏁 <b>Indy Carts</b>"
+
+MAIN_MENU_BUTTONS = [
+    ("👤 Профиль",   "profile"),
+    ("🃏 Карты",     "cards"),
+    ("💹 Биржа",     "market"),
+    ("🛒 Магазин",   "shop"),
+    ("⚔️ PvP",       "pvp"),
+    ("🏦 Банк",      "bank"),
+    ("🏆 Рейтинг",   "rating"),
+    ("👥 Рефералка", "ref"),
+    ("📅 Ежедневка", "daily"),
+]
+
+# Заглушки будущих патчей — раскомментировать при деплое
+FUTURE_MENU_BUTTONS = [
+     ("💎 Indy+",   "plus"),      # 0.8.0
+     ("🎭 Ивенты",  "events"),    # Creator
+     ("🏰 Клан",    "clan"),      # 1.1.0
+     ("🎯 Аукцион", "auction"),   # 1.1.0
+]
