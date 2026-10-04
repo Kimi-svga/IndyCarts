@@ -68,22 +68,12 @@ MERGE_RULES = {
     RARITY_LEGENDARY: {"result": RARITY_LIMITED, "chance": 0.2},
 }
 
-ROLE_OWNER = "owner"
-ROLE_ADMIN = "admin"
-ROLE_MODERATOR = "moderator"
-ROLE_USER = "user"
-
 RESERVED_USERNAMES = {
     "owner", "admin", "support", "mod", "staff", "system", "bot",
     "p49", "indycarts", "bank", "market", "auction", "help", "official",
 }
 
 USERNAME_PATTERN = r"^[A-Za-z][A-Za-z0-9_]{2,19}$"
-
-
-# ─────────────────────────────────────────────
-# UI · Главное меню
-# ─────────────────────────────────────────────
 
 MAIN_MENU_TITLE = "🏁 <b>Indy Carts</b>"
 
@@ -100,11 +90,7 @@ MAIN_MENU_BUTTONS = [
     ("💎 Indy+",     "plus"),
 ]
 
-
-# ─────────────────────────────────────────────
-# Банк 2.0 (патч 0.9.0)
-# ─────────────────────────────────────────────
-
+# Банк
 LOAN_RATES = [
     (50_000,       0.15),
     (200_000,      0.20),
@@ -135,4 +121,27 @@ TRUST_DELTA = {
     "overdue":       -15,
     "refinance":     -3,
     "default":       -50,
+}
+
+# PvP 2.0 (1.0.0)
+PVP_TITLES = [
+    (2000, "👑 Легенда"),
+    (1800, "🏆 Чемпион"),
+    (1600, "⭐ Элита"),
+    (1400, "🔥 Про"),
+    (1200, "🟢 Новичок"),
+    (0,    "⚪ Стажёр"),
+]
+
+PVP_SEASON_REWARDS = {
+    1:  {"money": 100_000, "attempts": 50, "card": True,  "title": "👑 Чемпион"},
+    2:  {"money": 75_000,  "attempts": 30, "card": False, "title": "🥈 Вице-чемпион"},
+    3:  {"money": 50_000,  "attempts": 20, "card": False, "title": "🥉 Бронза"},
+    4:  {"money": 30_000,  "attempts": 10, "card": False, "title": None},
+    5:  {"money": 30_000,  "attempts": 10, "card": False, "title": None},
+    6:  {"money": 15_000,  "attempts": 5,  "card": False, "title": None},
+    7:  {"money": 15_000,  "attempts": 5,  "card": False, "title": None},
+    8:  {"money": 15_000,  "attempts": 5,  "card": False, "title": None},
+    9:  {"money": 15_000,  "attempts": 5,  "card": False, "title": None},
+    10: {"money": 15_000,  "attempts": 5,  "card": False, "title": None},
 } 
