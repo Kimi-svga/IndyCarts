@@ -1,4 +1,4 @@
-"""Главное меню — единая точка входа и возврата (патч 0.7.0)."""
+"""Главное меню — единая точка входа и возврата."""
 
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
@@ -50,4 +50,12 @@ async def show_main_menu(
 async def cb_back(query: CallbackQuery) -> None:
     """Возврат в главное меню."""
     await safe_answer(query)
-    await show_main_menu(query) 
+    await show_main_menu(query)
+
+
+@router.callback_query(MainMenu.filter(F.action == "plus"))
+async def cb_plus_from_menu(query: CallbackQuery) -> None:
+    """Открытие Indy+ из главного меню."""
+    await safe_answer(query)
+    from bot.handlers.plus import _render_plus_menu
+    await _render_plus_menu(query)
