@@ -1,6 +1,10 @@
-"""PvP-рейтинг по системе Эло."""
+
+"""PvP: Эло, титулы, сезоны."""
 
 from dataclasses import dataclass
+from datetime import datetime
+
+from core.constants import PVP_TITLES
 
 
 START_RATING = 1000
@@ -19,13 +23,7 @@ def calculate_elo(
     loser_rating: int,
     k: int = K_FACTOR,
 ) -> EloResult:
-    """
-    Считает изменение рейтинга после дуэли.
-
-    Формула:
-        expected = 1 / (1 + 10 ** ((opponent - player) / 400))
-        delta = K × (1 - expected)
-    """
+    """Считает изменение рейтинга после дуэли."""
     expected_winner = 1 / (1 + 10 ** ((loser_rating - winner_rating) / 400))
     delta = int(k * (1 - expected_winner))
     delta = max(1, delta)
@@ -34,15 +32,26 @@ def calculate_elo(
 
 def get_rank_title(rating: int) -> str:
     """Возвращает титул по рейтингу."""
-    if rating >= 2000:
-        return "👑 Легенда"
-    elif rating >= 1700:
-        return "🏆 Чемпион"
-    elif rating >= 1400:
-        return "⭐ Элита"
-    elif rating >= 1200:
-        return "🔥 Про"
-    elif rating >= 1000:
-        return "🟢 Новичок"
-    else:
-        return "⚪ Стажёр"
+    for threshold, title in PVP_TITLES:
+        if rating >= threshold:
+            return title
+    return "⚪ Стажёр"
+
+
+def calculate_pvp_money_prize(
+    stake_challenger: int,
+    stake_opponent: int,
+    commission: float = 0.10,
+) -> int:
+    """
+    Победитель забирает всё, игра забирает комиссию.
+    """
+    total = stake_challenger + stake_opponent
+    prize = int(total * (1 - commission))
+    return prize
+
+
+def days_until_season_end(ends_at: datetime) -> int:
+    """Сколько дней до конца сезона."""
+    diff = ends_at - datetime.utcnow()
+    return max(0, diff.days) 
