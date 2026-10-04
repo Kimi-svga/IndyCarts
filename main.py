@@ -12,7 +12,7 @@ from aiogram.utils.callback_answer import CallbackAnswerMiddleware
 from fastapi import FastAPI, Request, Response
 
 from bot.handlers import (
-    admin, bank, cards, daily, market, profile,
+    admin, bank, cards, daily, market, menu, profile,
     promo, pvp, rating, ref, roles, shop, start,
 )
 from core.config import settings
@@ -29,7 +29,12 @@ bot = Bot(
 dp = Dispatcher(storage=storage)
 dp.callback_query.middleware(CallbackAnswerMiddleware())
 
-for r in (start, profile, cards, daily, market, pvp, bank, rating, promo, admin, roles, shop, ref):
+# ВАЖНО: menu подключается последним — перекрывает старые cb_back
+for r in (
+    start, profile, cards, daily, market, pvp,
+    bank, rating, promo, admin, roles, shop, ref,
+    menu,
+):
     dp.include_router(r.router)
 
 
@@ -179,7 +184,7 @@ async def pvp_rewards_task() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Запуск и остановка."""
-    logger.info("🚀 Запуск Indy Carts v0.6.1...")
+    logger.info("🚀 Запуск Indy Carts v0.7.0...")
 
     await init_db()
     asyncio.create_task(save_prices_task())
@@ -203,7 +208,7 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Остановлен")
 
 
-app = FastAPI(title="Indy Carts", version="0.6.1", lifespan=lifespan)
+app = FastAPI(title="Indy Carts", version="0.7.0", lifespan=lifespan)
 
 
 @app.post("/webhook")
@@ -230,7 +235,7 @@ async def health() -> dict:
         me = await bot.get_me()
         return {
             "status": "ok",
-            "version": "0.6.1",
+            "version": "0.7.0",
             "bot": me.username,
             "webhook": info.url,
         }
