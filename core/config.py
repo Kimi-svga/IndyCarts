@@ -25,5 +25,15 @@ class Settings(BaseSettings):
     REFERRAL_BONUS_ATTEMPTS: int = 1
     REFERRAL_MAX_PER_DAY: int = 10
 
+    # ─── Indy+ (патч 0.8.0) ───
+    PLUS_PRICE_STARS: int = 20
+    PLUS_PRICE_COINS: int = 200_000
+    PLUS_DURATION_DAYS: int = 30
+    PLUS_BONUS_ATTEMPTS: int = 5
+    PLUS_PVP_MULTIPLIER: float = 1.2
+    PLUS_ROYALTY_PERCENT: float = 7.0
+    PLUS_AUCTION_COMMISSION: float = 5.0
+    PLUS_DAILY_ATTEMPTS: int = 5
+
 
 settings = Settings() 
