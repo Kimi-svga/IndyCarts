@@ -10,20 +10,19 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.callback_answer import CallbackAnswerMiddleware
 from fastapi import FastAPI, Request, Response
+from sqlalchemy import func, select
 
 from bot.handlers import (
-    admin, bank, cards, daily, market, menu, profile,
+    admin, bank, cards, daily, market, menu, plus, profile,
     promo, pvp, rating, ref, roles, shop, start,
 )
 from bot.middlewares.logger import LoggingMiddleware
 from core.config import settings
 from core.logger import setup_logger
+from db.models import Card, PlusReward, Subscription, User, UserCard
 from db.session import AsyncSessionLocal, close_db, init_db
 
 logger = setup_logger()
-
-
-# ─── 1. STORAGE / BOT / DP ───
 
 storage = MemoryStorage()
 bot = Bot(
@@ -32,30 +31,25 @@ bot = Bot(
 )
 dp = Dispatcher(storage=storage)
 
-
-# ─── 2. MIDDLEWARE ───
-
+# ─── MIDDLEWARE ───
 dp.message.middleware(LoggingMiddleware())
 dp.callback_query.middleware(LoggingMiddleware())
 dp.callback_query.middleware(CallbackAnswerMiddleware())
 
-
-# ─── 3. РОУТЕРЫ ───
-
+# ─── РОУТЕРЫ ───
 for r in (
     start, profile, cards, daily, market, pvp,
     bank, rating, promo, admin, roles, shop, ref,
+    plus,
     menu,
 ):
     dp.include_router(r.router)
 
 
-# ─── 4. КРОН-ЗАДАЧИ ───
+# ─── КРОН-ЗАДАЧИ ───
 
 async def save_prices_task() -> None:
-    from sqlalchemy import select
-    from db.models import Card, PriceHistory
-
+    from db.models import PriceHistory
     while True:
         await asyncio.sleep(3600)
         try:
@@ -70,10 +64,7 @@ async def save_prices_task() -> None:
 
 
 async def market_task() -> None:
-    from sqlalchemy import select
-    from db.models import Card
     from services.economy import Economy
-
     while True:
         await asyncio.sleep(600)
         try:
@@ -90,9 +81,6 @@ async def market_task() -> None:
 
 
 async def loan_check_task() -> None:
-    from sqlalchemy import select
-    from db.models import User, UserCard
-
     while True:
         await asyncio.sleep(3600)
         try:
@@ -134,13 +122,10 @@ async def loan_check_task() -> None:
 
 
 async def pvp_rewards_task() -> None:
-    from sqlalchemy import select
-    from db.models import PvpReward, User, UserCard
-
+    from db.models import PvpReward
     while True:
         await asyncio.sleep(3600)
         now = datetime.utcnow()
-
         if now.day != 1 or now.hour != 0:
             continue
 
@@ -191,24 +176,135 @@ async def pvp_rewards_task() -> None:
             logger.error(f"PvP-награды: {e}")
 
 
-# ─── 5. LIFESPAN ───
+async def subscription_check_task() -> None:
+    """Каждые 6 часов снимает истёкшие подписки."""
+    while True:
+        await asyncio.sleep(6 * 3600)
+        try:
+            async with AsyncSessionLocal() as session:
+                now = datetime.utcnow()
+
+                expired = (await session.execute(
+                    select(User).where(
+                        User.plus_tier == "indy_plus",
+                        User.plus_expires_at < now,
+                    )
+                )).scalars().all()
+
+                for u in expired:
+                    u.plus_tier = "free"
+                    u.priority_support = False
+
+                    sub = (await session.execute(
+                        select(Subscription).where(Subscription.user_id == u.id)
+                    )).scalar_one_or_none()
+                    if sub:
+                        sub.tier = "free"
+
+                    try:
+                        await bot.send_message(
+                            u.telegram_id,
+                            "💎 <b>Indy+ закончилась</b>\n\n"
+                            "Продлить: /plus\n\n"
+                            "⚠️ Уникальные карты остаются у тебя.",
+                            parse_mode="HTML",
+                        )
+                    except Exception:
+                        pass
+
+                await session.commit()
+                if expired:
+                    logger.info(f"💎 Подписки истекли: {len(expired)}")
+        except Exception as e:
+            logger.error(f"subscription_check: {e}")
+
+
+async def plus_monthly_rewards_task() -> None:
+    """1-го числа выдаёт подписчикам эксклюзивную карту."""
+    while True:
+        await asyncio.sleep(3600)
+        now = datetime.utcnow()
+        if now.day != 1 or now.hour != 0:
+            continue
+
+        month = now.strftime("%Y-%m")
+        try:
+            async with AsyncSessionLocal() as session:
+                existing = (await session.execute(
+                    select(PlusReward).where(PlusReward.month == month)
+                )).scalar_one_or_none()
+                if existing:
+                    continue
+
+                card = (await session.execute(
+                    select(Card)
+                    .where(Card.is_plus_only == True, Card.is_active == True)
+                    .order_by(func.random())
+                    .limit(1)
+                )).scalar_one_or_none()
+
+                if card is None:
+                    logger.warning("💎 Нет plus-only карты для выдачи")
+                    continue
+
+                session.add(PlusReward(
+                    month=month, card_id=card.id,
+                    money=5000, attempts=10,
+                ))
+
+                subs = (await session.execute(
+                    select(User).where(
+                        User.plus_tier == "indy_plus",
+                        User.plus_expires_at > now,
+                    )
+                )).scalars().all()
+
+                for u in subs:
+                    session.add(UserCard(
+                        user_id=u.id, card_id=card.id,
+                        acquired_price=0,
+                    ))
+                    u.balance += 5000
+                    u.daily_attempts += 10
+
+                    try:
+                        await bot.send_message(
+                            u.telegram_id,
+                            f"🎁 <b>Ежемесячная награда Indy+</b>\n\n"
+                            f"🃏 Эксклюзивная карта: <b>{card.name}</b>\n"
+                            f"💰 +5000 монет\n"
+                            f"🎴 +10 попыток",
+                            parse_mode="HTML",
+                        )
+                    except Exception:
+                        pass
+
+                await session.commit()
+                logger.info(f"💎 Награды выданы: {len(subs)}")
+        except Exception as e:
+            logger.error(f"plus_monthly: {e}")
+
+
+# ─── LIFESPAN ───
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 Запуск Indy Carts v0.7.0...")
+    logger.info("🚀 Запуск Indy Carts v0.8.0...")
 
     await init_db()
     asyncio.create_task(save_prices_task())
     asyncio.create_task(market_task())
     asyncio.create_task(loan_check_task())
     asyncio.create_task(pvp_rewards_task())
+    asyncio.create_task(subscription_check_task())
+    asyncio.create_task(plus_monthly_rewards_task())
 
     webhook_url = f"{settings.WEBHOOK_URL}/webhook"
     await bot.set_webhook(
         url=webhook_url,
         secret_token=settings.WEBHOOK_SECRET,
         drop_pending_updates=True,
-        allowed_updates=["message", "callback_query"],
+        allowed_updates=["message", "callback_query", "pre_checkout_query"],
     )
     logger.info(f"✅ Вебхук: {webhook_url}")
 
@@ -219,9 +315,7 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Остановлен")
 
 
-# ─── 6. APP ───
-
-app = FastAPI(title="Indy Carts", version="0.7.0", lifespan=lifespan)
+app = FastAPI(title="Indy Carts", version="0.8.0", lifespan=lifespan)
 
 
 @app.post("/webhook")
@@ -246,7 +340,7 @@ async def health() -> dict:
         me = await bot.get_me()
         return {
             "status": "ok",
-            "version": "0.7.0",
+            "version": "0.8.0",
             "bot": me.username,
             "webhook": info.url,
         }
