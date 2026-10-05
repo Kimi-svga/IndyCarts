@@ -2,7 +2,7 @@
 
 import asyncio
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.client.default import DefaultBotProperties
@@ -13,16 +13,18 @@ from fastapi import FastAPI, Request, Response
 from sqlalchemy import func, select
 
 from bot.handlers import (
-    admin, bank, cards, daily, market, menu, plus, profile,
-    promo, pvp, rating, ref, roles, shop, start,
+    admin, admin_bans, admin_broadcast, admin_tools,
+    bank, cards, daily, market, menu, plus, profile,
+    promo, pvp, rating, ref, roles, shop, start, stats,
 )
+from bot.middlewares.ban import BanMiddleware
 from bot.middlewares.logger import LoggingMiddleware
 from core.config import settings
 from core.constants import PVP_SEASON_REWARDS
 from core.logger import setup_logger
 from db.models import (
-    Card, Loan, PlusReward, PvpBattle, PvpSeason, SeasonReward,
-    Subscription, User, UserCard, UserSeasonStat,
+    ActionLog, Card, DailyStats, Loan, PlusReward, PvpBattle,
+    PvpSeason, SeasonReward, Subscription, User, UserCard, UserSeasonStat,
 )
 from db.session import AsyncSessionLocal, close_db, init_db
 
@@ -35,20 +37,27 @@ bot = Bot(
 )
 dp = Dispatcher(storage=storage)
 
+# ─── MIDDLEWARE ───
 dp.message.middleware(LoggingMiddleware())
+dp.message.middleware(BanMiddleware())
 dp.callback_query.middleware(LoggingMiddleware())
+dp.callback_query.middleware(BanMiddleware())
 dp.callback_query.middleware(CallbackAnswerMiddleware())
 
+# ─── РОУТЕРЫ ───
 for r in (
     start, profile, cards, daily, market, pvp,
-    bank, rating, promo, admin, roles, shop, ref,
+    bank, rating, promo, admin, admin_bans, admin_tools,
+    admin_broadcast, roles, shop, ref, stats,
     plus,
     menu,
 ):
     dp.include_router(r.router)
 
 
-# ─── КРОН-ЗАДАЧИ ───
+# ═════════════════════════════════════════════
+# КРОН-ЗАДАЧИ
+# ═════════════════════════════════════════════
 
 async def save_prices_task() -> None:
     from db.models import PriceHistory
@@ -241,7 +250,7 @@ async def plus_monthly_rewards_task() -> None:
 
 
 async def pvp_season_task() -> None:
-    """Проверяет сезон каждый час. Если кончился — завершает и выдаёт награды."""
+    """Проверяет сезон. Если кончился — завершает и выдаёт награды."""
     while True:
         await asyncio.sleep(3600)
         try:
@@ -253,7 +262,6 @@ async def pvp_season_task() -> None:
                 )).scalar_one_or_none()
 
                 if season is None:
-                    # Создать первый сезон, если нет
                     session.add(PvpSeason(
                         number=1,
                         name="Сезон 1",
@@ -265,19 +273,15 @@ async def pvp_season_task() -> None:
                     logger.info("🏁 Создан первый сезон PvP")
                     continue
 
-                # Ещё не кончился
                 if season.ends_at > now:
                     continue
 
-                # ── Сезон закончился ──
                 logger.info(f"🏁 Завершение сезона S{season.number}")
 
-                # 1. Топ-10
                 top = (await session.execute(
                     select(User).order_by(User.pvp_rating.desc()).limit(10)
                 )).scalars().all()
 
-                # 2. Снимок
                 import json
                 snapshot = [
                     {"id": u.id, "username": u.username, "rating": u.pvp_rating}
@@ -285,7 +289,6 @@ async def pvp_season_task() -> None:
                 ]
                 season.top10_snapshot = json.dumps(snapshot)
 
-                # 3. Награды из БД (если настроены) или из констант
                 rewards_db = (await session.execute(
                     select(SeasonReward).where(SeasonReward.season_id == season.id)
                 )).scalars().all()
@@ -293,7 +296,6 @@ async def pvp_season_task() -> None:
 
                 for i, user in enumerate(top, 1):
                     r = rewards_map.get(i)
-
                     money = r.reward_money if r else PVP_SEASON_REWARDS.get(i, {}).get("money", 0)
                     attempts = r.reward_attempts if r else PVP_SEASON_REWARDS.get(i, {}).get("attempts", 0)
                     card_id = r.reward_card_id if r else None
@@ -305,17 +307,14 @@ async def pvp_season_task() -> None:
                     if card_id:
                         session.add(UserCard(user_id=user.id, card_id=card_id, acquired_price=0))
 
-                    # Титул
                     if title:
-                        import json as js
                         try:
-                            titles = js.loads(user.season_titles or "[]")
+                            titles = json.loads(user.season_titles or "[]")
                         except Exception:
                             titles = []
                         titles.append(f"{title} S{season.number}")
-                        user.season_titles = js.dumps(titles, ensure_ascii=False)
+                        user.season_titles = json.dumps(titles, ensure_ascii=False)
 
-                    # Лучший результат
                     if user.best_rank is None or i < user.best_rank:
                         user.best_rank = i
                     if user.best_rating is None or user.pvp_rating > user.best_rating:
@@ -323,7 +322,6 @@ async def pvp_season_task() -> None:
 
                     user.seasons_played += 1
 
-                    # Статистика сезона
                     session.add(UserSeasonStat(
                         user_id=user.id,
                         season_id=season.id,
@@ -332,7 +330,6 @@ async def pvp_season_task() -> None:
                         reward_received=money,
                     ))
 
-                    # Уведомление
                     text = (
                         f"🏆 <b>Сезон S{season.number} завершён!</b>\n\n"
                         f"Твоё место: <b>#{i}</b>\n"
@@ -350,36 +347,32 @@ async def pvp_season_task() -> None:
                     except Exception:
                         pass
 
-                # 4. Сброс рейтинга ВСЕМ
                 all_users = (await session.execute(select(User))).scalars().all()
                 for u in all_users:
                     u.pvp_rating = settings.PVP_SEASON_RESET_RATING
                     u.pvp_wins = 0
                     u.pvp_losses = 0
 
-                # 5. Закрыть старый
                 season.is_active = False
                 season.is_finished = True
 
-                # 6. Создать новый
-                new_season = PvpSeason(
+                session.add(PvpSeason(
                     number=season.number + 1,
                     name=f"Сезон {season.number + 1}",
                     starts_at=now,
                     ends_at=now + timedelta(days=settings.PVP_SEASON_DAYS),
                     is_active=True,
-                )
-                session.add(new_season)
+                ))
 
                 await session.commit()
                 logger.info(f"🏁 S{season.number} завершён. S{season.number + 1} начат.")
-
         except Exception as e:
             logger.error(f"pvp_season: {e}")
 
 
 async def pvp_timeout_task() -> None:
     """Каждые 5 минут — отменяет зависшие бои."""
+    from db.models import PvpStake
     while True:
         await asyncio.sleep(300)
         try:
@@ -395,12 +388,9 @@ async def pvp_timeout_task() -> None:
 
                 for battle in stuck:
                     battle.status = "expired"
-
-                    # Разблокировать карты
                     stakes = (await session.execute(
                         select(PvpStake).where(PvpStake.battle_id == battle.id)
                     )).scalars().all()
-
                     for stake in stakes:
                         uc = await session.get(UserCard, stake.user_card_id)
                         if uc:
@@ -413,9 +403,74 @@ async def pvp_timeout_task() -> None:
             logger.error(f"pvp_timeout: {e}")
 
 
+async def daily_stats_task() -> None:
+    """Раз в день — снимок метрик."""
+    while True:
+        await asyncio.sleep(3600)
+        now = datetime.utcnow()
+        if now.hour != 0:
+            continue
+
+        today = now.date()
+        try:
+            async with AsyncSessionLocal() as session:
+                existing = (await session.execute(
+                    select(DailyStats).where(DailyStats.date == today)
+                )).scalar_one_or_none()
+                if existing:
+                    continue
+
+                day_ago = now - timedelta(days=1)
+
+                users_total = (await session.execute(
+                    select(func.count(User.id))
+                )).scalar() or 0
+
+                users_new = (await session.execute(
+                    select(func.count(User.id)).where(User.created_at > day_ago)
+                )).scalar() or 0
+
+                money_total = (await session.execute(
+                    select(func.sum(User.balance))
+                )).scalar() or 0
+
+                cards_in_play = (await session.execute(
+                    select(func.count(UserCard.id))
+                )).scalar() or 0
+
+                pvp_battles = (await session.execute(
+                    select(func.count(PvpBattle.id)).where(PvpBattle.created_at > day_ago)
+                )).scalar() or 0
+
+                plus_active = (await session.execute(
+                    select(func.count(User.id)).where(
+                        User.plus_tier == "indy_plus",
+                        User.plus_expires_at > now,
+                    )
+                )).scalar() or 0
+
+                session.add(DailyStats(
+                    date=today,
+                    users_total=users_total,
+                    users_new=users_new,
+                    money_total=money_total,
+                    cards_in_play=cards_in_play,
+                    pvp_battles=pvp_battles,
+                    plus_active=plus_active,
+                ))
+                await session.commit()
+                logger.info(f"📊 Daily stats: {today}")
+        except Exception as e:
+            logger.error(f"daily_stats: {e}")
+
+
+# ═════════════════════════════════════════════
+# LIFESPAN
+# ═════════════════════════════════════════════
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 Запуск Indy Carts v1.0.0...")
+    logger.info("🚀 Запуск Indy Carts v1.1.0...")
 
     await init_db()
     asyncio.create_task(save_prices_task())
@@ -425,6 +480,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(plus_monthly_rewards_task())
     asyncio.create_task(pvp_season_task())
     asyncio.create_task(pvp_timeout_task())
+    asyncio.create_task(daily_stats_task())
 
     webhook_url = f"{settings.WEBHOOK_URL}/webhook"
     await bot.set_webhook(
@@ -442,7 +498,7 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Остановлен")
 
 
-app = FastAPI(title="Indy Carts", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Indy Carts", version="1.1.0", lifespan=lifespan)
 
 
 @app.post("/webhook")
@@ -465,7 +521,7 @@ async def health() -> dict:
         me = await bot.get_me()
         return {
             "status": "ok",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "bot": me.username,
             "webhook": info.url,
         }
