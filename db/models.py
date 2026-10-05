@@ -1,3 +1,4 @@
+
 """Модели SQLAlchemy для Indy Carts."""
 
 from datetime import date, datetime
@@ -36,18 +37,20 @@ class User(Base):
     pvp_wins: Mapped[int] = mapped_column(Integer, default=0)
     pvp_losses: Mapped[int] = mapped_column(Integer, default=0)
     pvp_rating: Mapped[int] = mapped_column(Integer, default=1000, index=True)
-
-    # PvP 2.0
     pvp_wins_total: Mapped[int] = mapped_column(Integer, default=0)
     pvp_losses_total: Mapped[int] = mapped_column(Integer, default=0)
     pvp_money_staked: Mapped[int] = mapped_column(BigInteger, default=0)
     pvp_money_won: Mapped[int] = mapped_column(BigInteger, default=0)
 
-    # Сезоны
     season_titles: Mapped[str] = mapped_column(Text, default="[]")
     best_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
     best_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
     seasons_played: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Бан
+    ban_level: Mapped[str] = mapped_column(String(16), default="none", index=True)
+    ban_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    warnings_count: Mapped[int] = mapped_column(Integer, default=0)
 
     # Банк
     loan_amount: Mapped[int] = mapped_column(BigInteger, default=0)
@@ -141,7 +144,6 @@ class PvpBattle(Base):
     opponent_roll: Mapped[int | None] = mapped_column(Integer, nullable=True)
     winner_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
 
-    # PvP 2.0
     money_stake: Mapped[int] = mapped_column(BigInteger, default=0)
     season_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("pvp_seasons.id"), nullable=True, index=True)
     challenger_ready: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -159,7 +161,7 @@ class PvpStake(Base):
     battle_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("pvp_battles.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     user_card_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("user_cards.id"), nullable=False)
-    side: Mapped[str] = mapped_column(String(16))  # challenger / opponent
+    side: Mapped[str] = mapped_column(String(16))
 
 
 class PvpSeason(Base):
@@ -169,15 +171,11 @@ class PvpSeason(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     number: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
-
     starts_at: Mapped[datetime] = mapped_column(DateTime)
     ends_at: Mapped[datetime] = mapped_column(DateTime)
-
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     is_finished: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-
     top10_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
-
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
@@ -188,7 +186,6 @@ class SeasonReward(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     season_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("pvp_seasons.id", ondelete="CASCADE"), nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
-
     reward_money: Mapped[int] = mapped_column(BigInteger, default=0)
     reward_attempts: Mapped[int] = mapped_column(Integer, default=0)
     reward_card_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cards.id"), nullable=True)
@@ -204,7 +201,6 @@ class UserSeasonStat(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     season_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("pvp_seasons.id", ondelete="CASCADE"), nullable=False)
-
     final_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
     final_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
     reward_received: Mapped[int] = mapped_column(BigInteger, default=0)
@@ -266,7 +262,7 @@ class Reward(Base):
 
 
 class PvpReward(Base):
-    """Старая награда (для совместимости)."""
+    """Старая награда PvP."""
     __tablename__ = "pvp_rewards"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -282,10 +278,64 @@ class AdminRole(Base):
     __tablename__ = "admin_roles"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
-    role: Mapped[str] = mapped_column(String(16), nullable=False, default="admin")
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="admin", index=True)
     appointed_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     appointed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    notes: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class Ban(Base):
+    """Запись о наказании."""
+    __tablename__ = "bans"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    level: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    reason: Mapped[str] = mapped_column(String(256), nullable=False)
+    moderator_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    is_auto: Mapped[bool] = mapped_column(Boolean, default=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    is_permanent: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    lifted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    lifted_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class ActionLog(Base):
+    """Лог действий игрока."""
+    __tablename__ = "action_logs"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    data: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+
+
+class DailyStats(Base):
+    """Снимок метрик за день."""
+    __tablename__ = "daily_stats"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    date: Mapped[date] = mapped_column(Date, unique=True, nullable=False, index=True)
+    users_total: Mapped[int] = mapped_column(Integer, default=0)
+    users_new: Mapped[int] = mapped_column(Integer, default=0)
+    users_active: Mapped[int] = mapped_column(Integer, default=0)
+    money_total: Mapped[int] = mapped_column(BigInteger, default=0)
+    money_in: Mapped[int] = mapped_column(BigInteger, default=0)
+    money_out: Mapped[int] = mapped_column(BigInteger, default=0)
+    cards_in_play: Mapped[int] = mapped_column(Integer, default=0)
+    cards_dropped: Mapped[int] = mapped_column(Integer, default=0)
+    pvp_battles: Mapped[int] = mapped_column(Integer, default=0)
+    plus_active: Mapped[int] = mapped_column(Integer, default=0)
+    plus_new: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
 class Referral(Base):
@@ -308,13 +358,11 @@ class Subscription(Base):
     tier: Mapped[str] = mapped_column(String(16), default="free", index=True)
     started_at: Mapped[datetime] = mapped_column(DateTime)
     expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
-
     auto_renew: Mapped[bool] = mapped_column(Boolean, default=False)
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
     total_paid_stars: Mapped[int] = mapped_column(Integer, default=0)
     total_paid_coins: Mapped[int] = mapped_column(BigInteger, default=0)
     renewals_count: Mapped[int] = mapped_column(Integer, default=0)
-
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
