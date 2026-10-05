@@ -145,3 +145,66 @@ PVP_SEASON_REWARDS = {
     9:  {"money": 15_000,  "attempts": 5,  "card": False, "title": None},
     10: {"money": 15_000,  "attempts": 5,  "card": False, "title": None},
 } 
+
+# ─────────────────────────────────────────────
+# Роли админов
+# ─────────────────────────────────────────────
+
+ROLE_LEVELS = {
+    "owner": 100,
+    "admin": 80,
+    "moderator": 60,
+    "helper": 40,
+    "support": 30,
+}
+
+ROLE_EMOJI = {
+    "owner": "👑",
+    "admin": "🔴",
+    "moderator": "🟡",
+    "helper": "🟢",
+    "support": "🔵",
+}
+
+ROLE_NAMES = {
+    "owner": "Владелец",
+    "admin": "Администратор",
+    "moderator": "Модератор",
+    "helper": "Помощник",
+    "support": "Поддержка",
+}
+
+
+# ─────────────────────────────────────────────
+# Ban Hammer
+# ─────────────────────────────────────────────
+
+BAN_LEVELS = {
+    "warn": "⚠️",
+    "mute": "🔇",
+    "ban": "🚫",
+}
+
+BAN_NAMES = {
+    "warn": "Предупреждение",
+    "mute": "Мьют",
+    "ban": "Бан",
+}
+
+MUTE_DURATIONS = [1, 24, 168]
+BAN_DURATIONS = [168, 720, None]
+
+
+# ─────────────────────────────────────────────
+# Ban Hammer · Автоправила
+# ─────────────────────────────────────────────
+
+BAN_BAD_WORDS = {
+    "fuck", "shit", "bitch", "asshole",
+    "бля", "хуй", "пизда", "ебать", "сука",
+    "дурак", "идиот",
+}
+
+BAN_WARN_THRESHOLD = 3
+BAN_SPAM_THRESHOLD = 10
+BAN_WINTRADING_PAIRS = 5
