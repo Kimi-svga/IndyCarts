@@ -1,4 +1,4 @@
-"""Декораторы для хендлеров."""
+"""Декораторы для хендлеров. Универсально для Message и CallbackQuery."""
 
 import functools
 
@@ -48,16 +48,32 @@ async def check_role(telegram_id: int, required: str) -> bool:
     return user_level >= required_level
 
 
+async def _deny(target, text: str = "⛔ Нет доступа") -> None:
+    """Универсально отвечает на отказ."""
+    if hasattr(target, "answer"):
+        # CallbackQuery — есть .answer(text, show_alert)
+        if hasattr(target, "data"):  # CallbackQuery
+            try:
+                await target.answer(text, show_alert=True)
+            except Exception:
+                pass
+        else:  # Message
+            try:
+                await target.answer(text)
+            except Exception:
+                pass
+
+
 def require_role(required: str):
     """Универсальный декоратор по роли."""
     def decorator(func):
         @functools.wraps(func)
-        async def wrapper(query, *args, **kwargs):
-            uid = query.from_user.id
+        async def wrapper(event, *args, **kwargs):
+            uid = event.from_user.id
             if not await check_role(uid, required):
-                await safe_answer(query, "⛔ Нет доступа", show_alert=True)
+                await _deny(event)
                 return
-            return await func(query, *args, **kwargs)
+            return await func(event, *args, **kwargs)
         return wrapper
     return decorator
 
@@ -65,15 +81,15 @@ def require_role(required: str):
 def require_user(func):
     """Проверяет, что игрок зарегистрирован."""
     @functools.wraps(func)
-    async def wrapper(query, *args, **kwargs):
+    async def wrapper(event, *args, **kwargs):
         async with AsyncSessionLocal() as session:
             user = (await session.execute(
-                select(User).where(User.telegram_id == query.from_user.id)
+                select(User).where(User.telegram_id == event.from_user.id)
             )).scalar_one_or_none()
             if not user:
-                await safe_answer(query, "❌ Сначала /start", show_alert=True)
+                await _deny(event, "❌ Сначала /start")
                 return
-        return await func(query, user=user, *args, **kwargs)
+        return await func(event, user=user, *args, **kwargs)
     return wrapper
 
 
