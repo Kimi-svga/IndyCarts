@@ -1,8 +1,9 @@
 """Точка входа. FastAPI + aiogram webhook + крон."""
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.client.default import DefaultBotProperties
@@ -19,16 +20,22 @@ from bot.handlers import (
 )
 from bot.middlewares.ban import BanMiddleware
 from bot.middlewares.logger import LoggingMiddleware
+from bot.middlewares.user import UserMiddleware
 from core.config import settings
 from core.constants import PVP_SEASON_REWARDS
 from core.logger import setup_logger
 from db.models import (
-    ActionLog, Card, DailyStats, Loan, PlusReward, PvpBattle,
-    PvpSeason, SeasonReward, Subscription, User, UserCard, UserSeasonStat,
+    Card, DailyStats, Loan, PlusReward, PvpBattle, PvpSeason,
+    PvpStake, SeasonReward, Subscription, User, UserCard, UserSeasonStat,
 )
 from db.session import AsyncSessionLocal, close_db, init_db
 
 logger = setup_logger()
+
+
+# ═════════════════════════════════════════════
+# STORAGE · BOT · DISPATCHER
+# ═════════════════════════════════════════════
 
 storage = MemoryStorage()
 bot = Bot(
@@ -37,20 +44,35 @@ bot = Bot(
 )
 dp = Dispatcher(storage=storage)
 
-# ─── MIDDLEWARE ───
+
+# ═════════════════════════════════════════════
+# MIDDLEWARE — ПОРЯДОК КРИТИЧЕН
+# ═════════════════════════════════════════════
+# 1. Logging  — логирует всё
+# 2. User     — грузит User в data['user']
+# 3. Ban      — проверяет бан (видит user)
+# 4. CallbackAnswer — отвечает на callback
+
 dp.message.middleware(LoggingMiddleware())
+dp.message.middleware(UserMiddleware())
 dp.message.middleware(BanMiddleware())
+
 dp.callback_query.middleware(LoggingMiddleware())
+dp.callback_query.middleware(UserMiddleware())
 dp.callback_query.middleware(BanMiddleware())
 dp.callback_query.middleware(CallbackAnswerMiddleware())
 
-# ─── РОУТЕРЫ ───
+
+# ═════════════════════════════════════════════
+# РОУТЕРЫ
+# ═════════════════════════════════════════════
+
 for r in (
     start, profile, cards, daily, market, pvp,
     bank, rating, promo, admin, admin_bans, admin_tools,
     admin_broadcast, roles, shop, ref, stats,
     plus,
-    menu,
+    menu,  # ← ПОСЛЕДНИМ (перекрывает back)
 ):
     dp.include_router(r.router)
 
@@ -60,6 +82,7 @@ for r in (
 # ═════════════════════════════════════════════
 
 async def save_prices_task() -> None:
+    """Каждый час пишет цены в price_history."""
     from db.models import PriceHistory
     while True:
         await asyncio.sleep(3600)
@@ -69,12 +92,13 @@ async def save_prices_task() -> None:
                 for c in cards_list:
                     session.add(PriceHistory(card_id=c.id, price=c.current_price))
                 await session.commit()
-                logger.info(f"📊 История: {len(cards_list)}")
+                logger.info(f"📊 История цен: {len(cards_list)}")
         except Exception as e:
-            logger.error(f"История: {e}")
+            logger.error(f"История цен: {e}")
 
 
 async def market_task() -> None:
+    """Каждые 10 минут затухание цен."""
     from services.economy import Economy
     while True:
         await asyncio.sleep(600)
@@ -92,15 +116,21 @@ async def market_task() -> None:
 
 
 async def loan_check_task() -> None:
+    """Каждый час — проверка просрочки кредитов (3 стадии)."""
     from services.bank import apply_trust
+
     while True:
         await asyncio.sleep(3600)
         try:
             async with AsyncSessionLocal() as session:
                 now = datetime.utcnow()
 
+                # Стадия 1: active → overdue
                 to_overdue = (await session.execute(
-                    select(Loan).where(Loan.status == "active", Loan.due_at < now)
+                    select(Loan).where(
+                        Loan.status == "active",
+                        Loan.due_at < now,
+                    )
                 )).scalars().all()
 
                 for loan in to_overdue:
@@ -112,12 +142,16 @@ async def loan_check_task() -> None:
                             await bot.send_message(
                                 user.telegram_id,
                                 "⚠️ <b>ПРОСРОЧКА кредита!</b>\n\n"
-                                "3 дня на погашение, иначе дефолт.",
+                                "3 дня на погашение, иначе:\n"
+                                "• Конфискуется 10 карт\n"
+                                "• Баланс в минус\n"
+                                "• PvP блок на 7 дней",
                                 parse_mode="HTML",
                             )
                         except Exception:
                             pass
 
+                # Стадия 2: overdue + 3 дня → defaulted
                 to_default = (await session.execute(
                     select(Loan).where(
                         Loan.status == "overdue",
@@ -131,12 +165,12 @@ async def loan_check_task() -> None:
                     if not user:
                         continue
 
-                    cards = (await session.execute(
+                    cards_list = (await session.execute(
                         select(UserCard)
                         .where(UserCard.user_id == user.id)
                         .limit(settings.BANK_OVERDUE_CARDS_CONFISCATE)
                     )).scalars().all()
-                    for c in cards:
+                    for c in cards_list:
                         await session.delete(c)
 
                     remaining = loan.total_due - loan.paid
@@ -148,24 +182,33 @@ async def loan_check_task() -> None:
                         await bot.send_message(
                             user.telegram_id,
                             f"🚨 <b>ДЕФОЛТ!</b>\n\n"
-                            f"Конфисковано: <b>{len(cards)}</b> карт\n"
-                            f"PvP заблокирован на <b>{settings.BANK_PVP_BLOCK_DAYS} дней</b>.",
+                            f"Конфисковано: <b>{len(cards_list)}</b> карт\n"
+                            f"Баланс: <b>{user.balance:,}</b>\n"
+                            f"PvP заблокирован на "
+                            f"<b>{settings.BANK_PVP_BLOCK_DAYS} дней</b>.",
                             parse_mode="HTML",
                         )
                     except Exception:
                         pass
 
                 await session.commit()
+                if to_overdue or to_default:
+                    logger.info(
+                        f"🏦 Просрочка: {len(to_overdue)} → overdue, "
+                        f"{len(to_default)} → defaulted"
+                    )
         except Exception as e:
             logger.error(f"Кредиты: {e}")
 
 
 async def subscription_check_task() -> None:
+    """Каждые 6 часов — снимает истёкшие подписки."""
     while True:
         await asyncio.sleep(6 * 3600)
         try:
             async with AsyncSessionLocal() as session:
                 now = datetime.utcnow()
+
                 expired = (await session.execute(
                     select(User).where(
                         User.plus_tier == "indy_plus",
@@ -176,15 +219,19 @@ async def subscription_check_task() -> None:
                 for u in expired:
                     u.plus_tier = "free"
                     u.priority_support = False
+
                     sub = (await session.execute(
                         select(Subscription).where(Subscription.user_id == u.id)
                     )).scalar_one_or_none()
                     if sub:
                         sub.tier = "free"
+
                     try:
                         await bot.send_message(
                             u.telegram_id,
-                            "💎 <b>Indy+ закончилась</b>\n\nПродлить: /plus",
+                            "💎 <b>Indy+ закончилась</b>\n\n"
+                            "Продлить: /plus\n\n"
+                            "⚠️ Уникальные карты остаются у тебя.",
                             parse_mode="HTML",
                         )
                     except Exception:
@@ -198,11 +245,13 @@ async def subscription_check_task() -> None:
 
 
 async def plus_monthly_rewards_task() -> None:
+    """1-го числа — выдаёт подписчикам эксклюзивную карту."""
     while True:
         await asyncio.sleep(3600)
         now = datetime.utcnow()
         if now.day != 1 or now.hour != 0:
             continue
+
         month = now.strftime("%Y-%m")
         try:
             async with AsyncSessionLocal() as session:
@@ -215,13 +264,18 @@ async def plus_monthly_rewards_task() -> None:
                 card = (await session.execute(
                     select(Card)
                     .where(Card.is_plus_only == True, Card.is_active == True)
-                    .order_by(func.random()).limit(1)
+                    .order_by(func.random())
+                    .limit(1)
                 )).scalar_one_or_none()
 
                 if card is None:
+                    logger.warning("💎 Нет plus-only карты")
                     continue
 
-                session.add(PlusReward(month=month, card_id=card.id, money=5000, attempts=10))
+                session.add(PlusReward(
+                    month=month, card_id=card.id,
+                    money=5000, attempts=10,
+                ))
 
                 subs = (await session.execute(
                     select(User).where(
@@ -231,20 +285,27 @@ async def plus_monthly_rewards_task() -> None:
                 )).scalars().all()
 
                 for u in subs:
-                    session.add(UserCard(user_id=u.id, card_id=card.id, acquired_price=0))
+                    session.add(UserCard(
+                        user_id=u.id, card_id=card.id,
+                        acquired_price=0,
+                    ))
                     u.balance += 5000
                     u.daily_attempts += 10
+
                     try:
                         await bot.send_message(
                             u.telegram_id,
-                            f"🎁 <b>Награда Indy+</b>\n\n"
-                            f"🃏 {card.name}\n💰 +5000\n🎴 +10",
+                            f"🎁 <b>Ежемесячная награда Indy+</b>\n\n"
+                            f"🃏 Эксклюзивная карта: <b>{card.name}</b>\n"
+                            f"💰 +5000 монет\n"
+                            f"🎴 +10 попыток",
                             parse_mode="HTML",
                         )
                     except Exception:
                         pass
 
                 await session.commit()
+                logger.info(f"💎 Награды Indy+ выданы: {len(subs)}")
         except Exception as e:
             logger.error(f"plus_monthly: {e}")
 
@@ -261,6 +322,7 @@ async def pvp_season_task() -> None:
                     select(PvpSeason).where(PvpSeason.is_active == True)
                 )).scalar_one_or_none()
 
+                # Создать первый сезон, если нет
                 if season is None:
                     session.add(PvpSeason(
                         number=1,
@@ -273,22 +335,25 @@ async def pvp_season_task() -> None:
                     logger.info("🏁 Создан первый сезон PvP")
                     continue
 
+                # Ещё не кончился
                 if season.ends_at > now:
                     continue
 
                 logger.info(f"🏁 Завершение сезона S{season.number}")
 
+                # 1. Топ-10
                 top = (await session.execute(
                     select(User).order_by(User.pvp_rating.desc()).limit(10)
                 )).scalars().all()
 
-                import json
+                # 2. Снимок
                 snapshot = [
                     {"id": u.id, "username": u.username, "rating": u.pvp_rating}
                     for u in top
                 ]
-                season.top10_snapshot = json.dumps(snapshot)
+                season.top10_snapshot = json.dumps(snapshot, ensure_ascii=False)
 
+                # 3. Награды
                 rewards_db = (await session.execute(
                     select(SeasonReward).where(SeasonReward.season_id == season.id)
                 )).scalars().all()
@@ -305,7 +370,9 @@ async def pvp_season_task() -> None:
                     user.daily_attempts += attempts
 
                     if card_id:
-                        session.add(UserCard(user_id=user.id, card_id=card_id, acquired_price=0))
+                        session.add(UserCard(
+                            user_id=user.id, card_id=card_id, acquired_price=0,
+                        ))
 
                     if title:
                         try:
@@ -347,15 +414,18 @@ async def pvp_season_task() -> None:
                     except Exception:
                         pass
 
+                # 4. Сброс рейтинга ВСЕМ
                 all_users = (await session.execute(select(User))).scalars().all()
                 for u in all_users:
                     u.pvp_rating = settings.PVP_SEASON_RESET_RATING
                     u.pvp_wins = 0
                     u.pvp_losses = 0
 
+                # 5. Закрыть старый
                 season.is_active = False
                 season.is_finished = True
 
+                # 6. Создать новый
                 session.add(PvpSeason(
                     number=season.number + 1,
                     name=f"Сезон {season.number + 1}",
@@ -371,8 +441,7 @@ async def pvp_season_task() -> None:
 
 
 async def pvp_timeout_task() -> None:
-    """Каждые 5 минут — отменяет зависшие бои."""
-    from db.models import PvpStake
+    """Каждые 5 минут — отменяет зависшие бои (> 10 минут)."""
     while True:
         await asyncio.sleep(300)
         try:
@@ -388,9 +457,11 @@ async def pvp_timeout_task() -> None:
 
                 for battle in stuck:
                     battle.status = "expired"
+
                     stakes = (await session.execute(
                         select(PvpStake).where(PvpStake.battle_id == battle.id)
                     )).scalars().all()
+
                     for stake in stakes:
                         uc = await session.get(UserCard, stake.user_card_id)
                         if uc:
@@ -459,9 +530,37 @@ async def daily_stats_task() -> None:
                     plus_active=plus_active,
                 ))
                 await session.commit()
-                logger.info(f"📊 Daily stats: {today}")
+                logger.info(f"📊 Daily stats за {today} сохранены")
         except Exception as e:
             logger.error(f"daily_stats: {e}")
+
+
+async def ban_expire_task() -> None:
+    """Каждые 30 минут — снимает истёкшие баны."""
+    from db.models import Ban
+    while True:
+        await asyncio.sleep(1800)
+        try:
+            async with AsyncSessionLocal() as session:
+                now = datetime.utcnow()
+
+                expired_users = (await session.execute(
+                    select(User).where(
+                        User.ban_level.in_(["ban", "mute"]),
+                        User.ban_expires_at < now,
+                        User.ban_expires_at.is_not(None),
+                    )
+                )).scalars().all()
+
+                for u in expired_users:
+                    u.ban_level = "none"
+                    u.ban_expires_at = None
+
+                if expired_users:
+                    await session.commit()
+                    logger.info(f"🔓 Баны истекли: {len(expired_users)}")
+        except Exception as e:
+            logger.error(f"ban_expire: {e}")
 
 
 # ═════════════════════════════════════════════
@@ -473,6 +572,7 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Запуск Indy Carts v1.1.0...")
 
     await init_db()
+
     asyncio.create_task(save_prices_task())
     asyncio.create_task(market_task())
     asyncio.create_task(loan_check_task())
@@ -481,6 +581,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(pvp_season_task())
     asyncio.create_task(pvp_timeout_task())
     asyncio.create_task(daily_stats_task())
+    asyncio.create_task(ban_expire_task())
 
     webhook_url = f"{settings.WEBHOOK_URL}/webhook"
     await bot.set_webhook(
@@ -498,24 +599,32 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Остановлен")
 
 
+# ═════════════════════════════════════════════
+# APP
+# ═════════════════════════════════════════════
+
 app = FastAPI(title="Indy Carts", version="1.1.0", lifespan=lifespan)
 
 
 @app.post("/webhook")
 async def webhook(request: Request) -> Response:
+    """Обработка вебхука."""
     if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != settings.WEBHOOK_SECRET:
         return Response(status_code=403)
+
     try:
         data = await request.json()
         update = types.Update.model_validate(data, context={"bot": bot})
         await dp.feed_update(bot, update)
     except Exception as e:
-        logger.error(f"❌ {e}")
+        logger.error(f"❌ Webhook: {e}")
+
     return Response(status_code=200)
 
 
 @app.get("/health")
 async def health() -> dict:
+    """Health check."""
     try:
         info = await bot.get_webhook_info()
         me = await bot.get_me()
