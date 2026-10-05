@@ -1,16 +1,69 @@
 """Декораторы для хендлеров."""
 
 import functools
+
 from sqlalchemy import select
 
 from bot.utils.stable import safe_answer
-from db.session import AsyncSessionLocal
-from db.models import User, AdminRole
 from core.config import settings
+from core.constants import ROLE_LEVELS
+from db.models import AdminRole, User
+from db.session import AsyncSessionLocal
+
+
+async def get_user_role(telegram_id: int) -> str | None:
+    """Возвращает роль игрока или None."""
+    if telegram_id in settings.OWNER_IDS:
+        return "owner"
+
+    if telegram_id in settings.ADMIN_IDS:
+        return "admin"
+
+    async with AsyncSessionLocal() as session:
+        user = (await session.execute(
+            select(User).where(User.telegram_id == telegram_id)
+        )).scalar_one_or_none()
+
+        if user is None:
+            return None
+
+        role = (await session.execute(
+            select(AdminRole).where(
+                AdminRole.user_id == user.id,
+                AdminRole.is_active == True,
+            )
+        )).scalar_one_or_none()
+
+    return role.role if role else None
+
+
+async def check_role(telegram_id: int, required: str) -> bool:
+    """Проверяет, что у игрока роль >= required."""
+    role = await get_user_role(telegram_id)
+    if role is None:
+        return False
+
+    user_level = ROLE_LEVELS.get(role, 0)
+    required_level = ROLE_LEVELS.get(required, 0)
+    return user_level >= required_level
+
+
+def require_role(required: str):
+    """Универсальный декоратор по роли."""
+    def decorator(func):
+        @functools.wraps(func)
+        async def wrapper(query, *args, **kwargs):
+            uid = query.from_user.id
+            if not await check_role(uid, required):
+                await safe_answer(query, "⛔ Нет доступа", show_alert=True)
+                return
+            return await func(query, *args, **kwargs)
+        return wrapper
+    return decorator
 
 
 def require_user(func):
-    """Проверяет, что игрок зарегистрирован, и передаёт его в хендлер."""
+    """Проверяет, что игрок зарегистрирован."""
     @functools.wraps(func)
     async def wrapper(query, *args, **kwargs):
         async with AsyncSessionLocal() as session:
@@ -24,31 +77,9 @@ def require_user(func):
     return wrapper
 
 
-def require_admin(func):
-    """Проверяет, что игрок — админ/владелец."""
-    @functools.wraps(func)
-    async def wrapper(query, *args, **kwargs):
-        uid = query.from_user.id
-        if uid in settings.OWNER_IDS or uid in settings.ADMIN_IDS:
-            return await func(query, *args, **kwargs)
-
-        async with AsyncSessionLocal() as session:
-            user = (await session.execute(select(User).where(User.telegram_id == uid))).scalar_one_or_none()
-            if user:
-                role = (await session.execute(select(AdminRole).where(AdminRole.user_id == user.id))).scalar_one_or_none()
-                if role:
-                    return await func(query, *args, **kwargs)
-
-        await safe_answer(query, "⛔ Нет доступа", show_alert=True)
-    return wrapper
-
-
-def require_owner(func):
-    """Проверяет, что игрок — владелец."""
-    @functools.wraps(func)
-    async def wrapper(query, *args, **kwargs):
-        if query.from_user.id not in settings.OWNER_IDS:
-            await safe_answer(query, "⛔ Только владелец", show_alert=True)
-            return
-        return await func(query, *args, **kwargs)
-    return wrapper 
+# Алиасы
+require_owner = require_role("owner")
+require_admin = require_role("admin")
+require_moderator = require_role("moderator")
+require_helper = require_role("helper")
+require_support = require_role("support") 
