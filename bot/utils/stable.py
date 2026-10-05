@@ -49,3 +49,11 @@ async def safe_send(bot, chat_id: int, text: str, markup: InlineKeyboardMarkup |
         await bot.send_message(chat_id, text, reply_markup=markup, parse_mode="HTML")
     except Exception:
         pass
+
+async def safe_send(bot, chat_id: int, text: str, markup=None) -> bool:
+    """Безопасно отправляет сообщение. Возвращает True если успешно."""
+    try:
+        await bot.send_message(chat_id, text, reply_markup=markup, parse_mode="HTML")
+        return True
+    except Exception:
+        return False
