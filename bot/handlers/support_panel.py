@@ -4,14 +4,13 @@ from datetime import datetime
 
 from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy import func, select
 
-from bot.keyboards.support import get_staff_ticket_actions
+from bot.keyboards.support import get_staff_ticket_actions, SupportPanelCD
 from bot.utils.decorators import check_role
 from bot.utils.stable import safe_answer, safe_render
 from core.config import settings
@@ -26,12 +25,6 @@ router = Router()
 logger = setup_logger()
 
 
-class SupportPanel(CallbackData, prefix="support_panel"):
-    action: str
-    ticket_id: int = 0
-    filter: str = ""
-
-
 class StaffReplyState(StatesGroup):
     waiting_text = State()
 
@@ -44,7 +37,7 @@ async def cmd_support_panel(message: Message) -> None:
     await _show_panel(message, is_message=True)
 
 
-@router.callback_query(SupportPanel.filter(F.action == "refresh"))
+@router.callback_query(SupportPanelCD.filter(F.action == "refresh"))
 async def cb_refresh(query: CallbackQuery) -> None:
     if not await check_role(query.from_user.id, "support"):
         await safe_answer(query, "⛔ Нет доступа", show_alert=True)
@@ -89,12 +82,30 @@ async def _show_panel(target, is_message: bool = False) -> None:
     )
 
     b = InlineKeyboardBuilder()
-    b.button(text=f"📬 Открытые ({open_count})", callback_data=SupportPanel(action="list", filter="open").pack())
-    b.button(text=f"🔴 Срочные ({urgent_count})", callback_data=SupportPanel(action="list", filter="urgent").pack())
-    b.button(text=f"⏳ Ожидают ({pending_count})", callback_data=SupportPanel(action="list", filter="pending").pack())
-    b.button(text="👤 Мои тикеты", callback_data=SupportPanel(action="list", filter="mine").pack())
-    b.button(text="📊 Статистика", callback_data=SupportPanel(action="stats").pack())
-    b.button(text="🔄 Обновить", callback_data=SupportPanel(action="refresh").pack())
+    b.button(
+        text=f"📬 Открытые ({open_count})",
+        callback_data=SupportPanelCD(action="list", filter="open").pack(),
+    )
+    b.button(
+        text=f"🔴 Срочные ({urgent_count})",
+        callback_data=SupportPanelCD(action="list", filter="urgent").pack(),
+    )
+    b.button(
+        text=f"⏳ Ожидают ({pending_count})",
+        callback_data=SupportPanelCD(action="list", filter="pending").pack(),
+    )
+    b.button(
+        text="👤 Мои тикеты",
+        callback_data=SupportPanelCD(action="list", filter="mine").pack(),
+    )
+    b.button(
+        text="📊 Статистика",
+        callback_data=SupportPanelCD(action="stats").pack(),
+    )
+    b.button(
+        text="🔄 Обновить",
+        callback_data=SupportPanelCD(action="refresh").pack(),
+    )
     b.adjust(2, 2, 1, 1)
 
     if is_message:
@@ -103,8 +114,8 @@ async def _show_panel(target, is_message: bool = False) -> None:
         await safe_render(target, text, b.as_markup())
 
 
-@router.callback_query(SupportPanel.filter(F.action == "list"))
-async def cb_list(query: CallbackQuery, callback_data: SupportPanel) -> None:
+@router.callback_query(SupportPanelCD.filter(F.action == "list"))
+async def cb_list(query: CallbackQuery, callback_data: SupportPanelCD) -> None:
     if not await check_role(query.from_user.id, "support"):
         await safe_answer(query, "⛔ Нет доступа", show_alert=True)
         return
@@ -147,7 +158,10 @@ async def cb_list(query: CallbackQuery, callback_data: SupportPanel) -> None:
 
     if not tickets:
         b = InlineKeyboardBuilder()
-        b.button(text="🔙 К панели", callback_data=SupportPanel(action="refresh").pack())
+        b.button(
+            text="🔙 К панели",
+            callback_data=SupportPanelCD(action="refresh").pack(),
+        )
         b.adjust(1)
         await safe_render(query, "✅ <b>Тикетов нет</b>", b.as_markup())
         return
@@ -170,16 +184,19 @@ async def cb_list(query: CallbackQuery, callback_data: SupportPanel) -> None:
         short = t.subject[:30]
         b.button(
             text=f"{priority_emoji} #{t.id} @{uname} · {short}",
-            callback_data=SupportPanel(action="view", ticket_id=t.id).pack(),
+            callback_data=SupportPanelCD(action="view", ticket_id=t.id).pack(),
         )
-    b.button(text="🔙 К панели", callback_data=SupportPanel(action="refresh").pack())
+    b.button(
+        text="🔙 К панели",
+        callback_data=SupportPanelCD(action="refresh").pack(),
+    )
     b.adjust(1)
 
     await safe_render(query, text, b.as_markup())
 
 
-@router.callback_query(SupportPanel.filter(F.action == "view"))
-async def cb_view(query: CallbackQuery, callback_data: SupportPanel) -> None:
+@router.callback_query(SupportPanelCD.filter(F.action == "view"))
+async def cb_view(query: CallbackQuery, callback_data: SupportPanelCD) -> None:
     if not await check_role(query.from_user.id, "support"):
         await safe_answer(query, "⛔ Нет доступа", show_alert=True)
         return
@@ -229,8 +246,12 @@ async def cb_view(query: CallbackQuery, callback_data: SupportPanel) -> None:
     await safe_render(query, text, get_staff_ticket_actions(ticket.id))
 
 
-@router.callback_query(SupportPanel.filter(F.action == "reply"))
-async def cb_staff_reply(query: CallbackQuery, callback_data: SupportPanel, state: FSMContext) -> None:
+@router.callback_query(SupportPanelCD.filter(F.action == "reply"))
+async def cb_staff_reply(
+    query: CallbackQuery,
+    callback_data: SupportPanelCD,
+    state: FSMContext,
+) -> None:
     if not await check_role(query.from_user.id, "support"):
         await safe_answer(query, "⛔ Нет доступа", show_alert=True)
         return
@@ -241,7 +262,9 @@ async def cb_staff_reply(query: CallbackQuery, callback_data: SupportPanel, stat
     b = InlineKeyboardBuilder()
     b.button(
         text="❌ Отмена",
-        callback_data=SupportPanel(action="view", ticket_id=callback_data.ticket_id).pack(),
+        callback_data=SupportPanelCD(
+            action="view", ticket_id=callback_data.ticket_id,
+        ).pack(),
     )
     b.adjust(1)
 
@@ -309,8 +332,8 @@ async def handle_staff_reply(message: Message, state: FSMContext) -> None:
     await message.answer(f"✅ Ответ отправлен в тикет #{ticket_id}")
 
 
-@router.callback_query(SupportPanel.filter(F.action == "resolve"))
-async def cb_resolve(query: CallbackQuery, callback_data: SupportPanel) -> None:
+@router.callback_query(SupportPanelCD.filter(F.action == "resolve"))
+async def cb_resolve(query: CallbackQuery, callback_data: SupportPanelCD) -> None:
     if not await check_role(query.from_user.id, "support"):
         await safe_answer(query, "⛔ Нет доступа", show_alert=True)
         return
@@ -318,8 +341,8 @@ async def cb_resolve(query: CallbackQuery, callback_data: SupportPanel) -> None:
     await _resolve_ticket(query, callback_data.ticket_id, "resolved")
 
 
-@router.callback_query(SupportPanel.filter(F.action == "close"))
-async def cb_close(query: CallbackQuery, callback_data: SupportPanel) -> None:
+@router.callback_query(SupportPanelCD.filter(F.action == "close"))
+async def cb_close(query: CallbackQuery, callback_data: SupportPanelCD) -> None:
     if not await check_role(query.from_user.id, "support"):
         await safe_answer(query, "⛔ Нет доступа", show_alert=True)
         return
@@ -327,8 +350,8 @@ async def cb_close(query: CallbackQuery, callback_data: SupportPanel) -> None:
     await _resolve_ticket(query, callback_data.ticket_id, "closed")
 
 
-@router.callback_query(SupportPanel.filter(F.action == "urgent"))
-async def cb_urgent(query: CallbackQuery, callback_data: SupportPanel) -> None:
+@router.callback_query(SupportPanelCD.filter(F.action == "urgent"))
+async def cb_urgent(query: CallbackQuery, callback_data: SupportPanelCD) -> None:
     if not await check_role(query.from_user.id, "support"):
         await safe_answer(query, "⛔ Нет доступа", show_alert=True)
         return
@@ -378,12 +401,15 @@ async def _resolve_ticket(query: CallbackQuery, ticket_id: int, new_status: str)
                 pass
 
     b = InlineKeyboardBuilder()
-    b.button(text="🔙 К панели", callback_data=SupportPanel(action="refresh").pack())
+    b.button(
+        text="🔙 К панели",
+        callback_data=SupportPanelCD(action="refresh").pack(),
+    )
     b.adjust(1)
     await safe_render(query, f"✅ Тикет #{ticket_id} обработан", b.as_markup())
 
 
-@router.callback_query(SupportPanel.filter(F.action == "stats"))
+@router.callback_query(SupportPanelCD.filter(F.action == "stats"))
 async def cb_stats(query: CallbackQuery) -> None:
     if not await check_role(query.from_user.id, "support"):
         await safe_answer(query, "⛔ Нет доступа", show_alert=True)
@@ -422,7 +448,10 @@ async def cb_stats(query: CallbackQuery) -> None:
         text += f"{i}. @{u.username} — {u.tickets_resolved}\n"
 
     b = InlineKeyboardBuilder()
-    b.button(text="🔙 К панели", callback_data=SupportPanel(action="refresh").pack())
+    b.button(
+        text="🔙 К панели",
+        callback_data=SupportPanelCD(action="refresh").pack(),
+    )
     b.adjust(1)
 
     await safe_render(query, text, b.as_markup()) 
