@@ -75,6 +75,7 @@ RESERVED_USERNAMES = {
 
 USERNAME_PATTERN = r"^[A-Za-z][A-Za-z0-9_]{2,19}$"
 
+
 MAIN_MENU_TITLE = "🏁 <b>Indy Carts</b>"
 
 MAIN_MENU_BUTTONS = [
@@ -90,7 +91,7 @@ MAIN_MENU_BUTTONS = [
     ("💎 Indy+",     "plus"),
 ]
 
-# Банк
+
 LOAN_RATES = [
     (50_000,       0.15),
     (200_000,      0.20),
@@ -123,7 +124,7 @@ TRUST_DELTA = {
     "default":       -50,
 }
 
-# PvP 2.0 (1.0.0)
+
 PVP_TITLES = [
     (2000, "👑 Легенда"),
     (1800, "🏆 Чемпион"),
@@ -144,11 +145,8 @@ PVP_SEASON_REWARDS = {
     8:  {"money": 15_000,  "attempts": 5,  "card": False, "title": None},
     9:  {"money": 15_000,  "attempts": 5,  "card": False, "title": None},
     10: {"money": 15_000,  "attempts": 5,  "card": False, "title": None},
-} 
+}
 
-# ─────────────────────────────────────────────
-# Роли админов
-# ─────────────────────────────────────────────
 
 ROLE_LEVELS = {
     "owner": 100,
@@ -175,10 +173,6 @@ ROLE_NAMES = {
 }
 
 
-# ─────────────────────────────────────────────
-# Ban Hammer
-# ─────────────────────────────────────────────
-
 BAN_LEVELS = {
     "warn": "⚠️",
     "mute": "🔇",
@@ -194,11 +188,6 @@ BAN_NAMES = {
 MUTE_DURATIONS = [1, 24, 168]
 BAN_DURATIONS = [168, 720, None]
 
-
-# ─────────────────────────────────────────────
-# Ban Hammer · Автоправила
-# ─────────────────────────────────────────────
-
 BAN_BAD_WORDS = {
     "fuck", "shit", "bitch", "asshole",
     "бля", "хуй", "пизда", "ебать", "сука",
@@ -208,3 +197,37 @@ BAN_BAD_WORDS = {
 BAN_WARN_THRESHOLD = 3
 BAN_SPAM_THRESHOLD = 10
 BAN_WINTRADING_PAIRS = 5
+
+
+# ═════════════════════════════════════════════
+# Support System (1.2.0)
+# ═════════════════════════════════════════════
+
+TICKET_CATEGORIES = {
+    "bug":       "🐛 Баг / ошибка",
+    "balance":   "💰 Проблема с балансом",
+    "cards":     "🃏 Проблема с картами",
+    "pvp":       "⚔️ Проблема с PvP",
+    "bank":      "🏦 Проблема с банком",
+    "plus":      "💎 Проблема с Indy+",
+    "report":    "🚨 Жалоба на игрока",
+    "other":     "❓ Другое",
+}
+
+TICKET_PRIORITIES = {
+    "low":    "🟢 Низкий",
+    "normal": "🟡 Обычный",
+    "high":   "🟠 Высокий",
+    "urgent": "🔴 Срочный",
+}
+
+TICKET_STATUSES = {
+    "open":     "📬 Открыт",
+    "pending":  "⏳ В ожидании",
+    "resolved": "✅ Решён",
+    "closed":   "🔒 Закрыт",
+}
+
+TICKET_COOLDOWN_MINUTES = 15
+TICKET_MAX_OPEN = 2
+TICKET_AUTO_CLOSE_HOURS = 72 
