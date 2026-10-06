@@ -1,4 +1,3 @@
-
 """Модели SQLAlchemy для Indy Carts."""
 
 from datetime import date, datetime
@@ -47,12 +46,10 @@ class User(Base):
     best_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
     seasons_played: Mapped[int] = mapped_column(Integer, default=0)
 
-    # Бан
     ban_level: Mapped[str] = mapped_column(String(16), default="none", index=True)
     ban_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     warnings_count: Mapped[int] = mapped_column(Integer, default=0)
 
-    # Банк
     loan_amount: Mapped[int] = mapped_column(BigInteger, default=0)
     loan_due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     trust_score: Mapped[int] = mapped_column(Integer, default=0)
@@ -71,6 +68,11 @@ class User(Base):
     plus_tier: Mapped[str] = mapped_column(String(16), default="free", index=True)
     plus_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     priority_support: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Support (1.2.0)
+    support_reputation: Mapped[int] = mapped_column(Integer, default=0)
+    tickets_resolved: Mapped[int] = mapped_column(Integer, default=0)
+    last_ticket_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -420,4 +422,55 @@ class LoanPayment(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     loan_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("loans.id", ondelete="CASCADE"), index=True)
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    paid_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now()) 
+    paid_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+# ═════════════════════════════════════════════
+# SUPPORT SYSTEM (1.2.0)
+# ═════════════════════════════════════════════
+
+class Ticket(Base):
+    """Тикет поддержки."""
+    __tablename__ = "tickets"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    assigned_to: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
+
+    subject: Mapped[str] = mapped_column(String(128), nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    priority: Mapped[str] = mapped_column(String(16), default="normal")
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(),
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    closed_by: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+    )
+
+
+class TicketMessage(Base):
+    """Сообщение в тикете."""
+    __tablename__ = "ticket_messages"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    ticket_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tickets.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    sender_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    is_staff: Mapped[bool] = mapped_column(Boolean, default=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True) 
