@@ -22,7 +22,6 @@ class Settings(BaseSettings):
     REFERRAL_BONUS_ATTEMPTS: int = 1
     REFERRAL_MAX_PER_DAY: int = 10
 
-    # Indy+
     PLUS_PRICE_STARS: int = 20
     PLUS_PRICE_COINS: int = 200_000
     PLUS_DURATION_DAYS: int = 30
@@ -32,7 +31,6 @@ class Settings(BaseSettings):
     PLUS_AUCTION_COMMISSION: float = 5.0
     PLUS_DAILY_ATTEMPTS: int = 5
 
-    # Банк 2.0
     BANK_MAX_LOAN: int = 500_000
     BANK_ABS_MAX_LOAN: int = 1_000_000
     BANK_EARLY_DISCOUNT: float = 0.02
@@ -42,12 +40,22 @@ class Settings(BaseSettings):
     BANK_PVP_BLOCK_DAYS: int = 7
     BANK_REFINANCE_COOLDOWN_DAYS: int = 3
 
-    # PvP 2.0 (1.0.0)
     PVP_SEASON_DAYS: int = 30
     PVP_SEASON_RESET_RATING: int = 1000
     PVP_MAX_STAKES_PER_SIDE: int = 3
     PVP_BANK_COMMISSION: float = 0.10
     PVP_TIMEOUT_MINUTES: int = 10
 
+    BAN_WARN_DURATION_DAYS: int = 30
+    BAN_MUTE_DEFAULT_HOURS: int = 24
+    BAN_DEFAULT_DAYS: int = 30
+    BAN_DEFAULT_CONFISCATE_CARDS: int = 0
 
-settings = Settings() 
+    # Support System (1.2.0)
+    SUPPORT_TICKET_COOLDOWN_MIN: int = 15
+    SUPPORT_TICKET_MAX_OPEN: int = 2
+    SUPPORT_TICKET_AUTO_CLOSE_HOURS: int = 72
+    SUPPORT_REPUTATION_PER_RESOLVE: int = 5
+
+
+settings = Settings()
