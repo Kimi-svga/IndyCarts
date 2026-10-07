@@ -59,3 +59,11 @@ async def cb_plus_from_menu(query: CallbackQuery) -> None:
     await safe_answer(query)
     from bot.handlers.plus import _render_plus_menu
     await _render_plus_menu(query)
+
+
+@router.callback_query(MainMenu.filter(F.action == "auction"))
+async def cb_auction_from_menu(query: CallbackQuery) -> None:
+    """Открытие аукциона из главного меню."""
+    await safe_answer(query)
+    from bot.handlers.auction import cb_auction
+    await cb_auction(query) 
