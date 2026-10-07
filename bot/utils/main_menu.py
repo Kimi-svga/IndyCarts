@@ -1,4 +1,4 @@
-"""Сборка текста инфо-панели главного меню (патч 0.7.0)."""
+"""Сборка текста инфо-панели главного меню."""
 
 from datetime import date
 
@@ -6,16 +6,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.constants import MAIN_MENU_TITLE
-from db.models import Card, User, UserCard
+from db.models import Card, Friend, User, UserCard
 
 
 async def build_main_menu_text(
     user: User,
     session: AsyncSession,
 ) -> str:
-    """
-    Собирает инфо-панель главного меню.
-    """
+    """Собирает инфо-панель главного меню."""
     cards_count = (await session.execute(
         select(func.count(UserCard.id)).where(UserCard.user_id == user.id)
     )).scalar() or 0
@@ -24,6 +22,12 @@ async def build_main_menu_text(
         select(func.sum(Card.current_price))
         .join(UserCard, UserCard.card_id == Card.id)
         .where(UserCard.user_id == user.id)
+    )).scalar() or 0
+
+    collection_value = int(collection_value) if collection_value else 0
+
+    friends_count = (await session.execute(
+        select(func.count(Friend.id)).where(Friend.user_id == user.id)
     )).scalar() or 0
 
     daily_status = "доступна"
@@ -37,6 +41,7 @@ async def build_main_menu_text(
         f"💰 <b>{user.balance:,}</b>\n"
         f"🃏 <b>{cards_count}</b> карт · 💎 <b>{collection_value:,}</b>\n"
         f"⚔️ PvP: <b>{user.pvp_rating}</b> · 🔥 Стрик: <b>{user.daily_streak}</b>\n"
+        f"👥 Друзей: <b>{friends_count}</b>\n"
         f"🎴 Попытки: <b>{user.daily_attempts}</b>\n"
         f"📅 Ежедневка: <b>{daily_status}</b>"
     )
@@ -57,4 +62,4 @@ async def build_main_menu_text_for(
         return "❌ Сначала /start", None
 
     text = await build_main_menu_text(user, session)
-    return text, user
+    return text, user 
