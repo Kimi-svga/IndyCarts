@@ -10,12 +10,10 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    """Базовый класс моделей."""
     pass
 
 
 class User(Base):
-    """Игрок."""
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -69,7 +67,16 @@ class User(Base):
     plus_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     priority_support: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    # Support (1.2.0)
+    # Creator (1.2.0)
+    can_create_cards: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    creator_cards_today: Mapped[int] = mapped_column(Integer, default=0)
+    last_creator_card_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    creator_title: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    # Friends (1.3.0)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+
+    # Support
     support_reputation: Mapped[int] = mapped_column(Integer, default=0)
     tickets_resolved: Mapped[int] = mapped_column(Integer, default=0)
     last_ticket_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -80,7 +87,6 @@ class User(Base):
 
 
 class Card(Base):
-    """Шаблон карты."""
     __tablename__ = "cards"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -101,6 +107,8 @@ class Card(Base):
     issued: Mapped[int] = mapped_column(Integer, default=0)
 
     is_plus_only: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    is_creator_card: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    creator_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     created_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
@@ -108,7 +116,6 @@ class Card(Base):
 
 
 class UserCard(Base):
-    """Карта у игрока."""
     __tablename__ = "user_cards"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -124,7 +131,6 @@ class UserCard(Base):
 
 
 class PriceHistory(Base):
-    """История цен."""
     __tablename__ = "price_history"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -134,7 +140,6 @@ class PriceHistory(Base):
 
 
 class PvpBattle(Base):
-    """Дуэль."""
     __tablename__ = "pvp_battles"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -156,7 +161,6 @@ class PvpBattle(Base):
 
 
 class PvpStake(Base):
-    """Ставка карты в PvP."""
     __tablename__ = "pvp_stakes"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -167,7 +171,6 @@ class PvpStake(Base):
 
 
 class PvpSeason(Base):
-    """Сезон PvP."""
     __tablename__ = "pvp_seasons"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -182,7 +185,6 @@ class PvpSeason(Base):
 
 
 class SeasonReward(Base):
-    """Награда за сезон."""
     __tablename__ = "season_rewards"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -197,7 +199,6 @@ class SeasonReward(Base):
 
 
 class UserSeasonStat(Base):
-    """Итоги игрока за сезон."""
     __tablename__ = "user_season_stats"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -211,7 +212,6 @@ class UserSeasonStat(Base):
 
 
 class DailyReward(Base):
-    """Ежедневная награда."""
     __tablename__ = "daily_rewards"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -225,7 +225,6 @@ class DailyReward(Base):
 
 
 class PromoCode(Base):
-    """Промокод."""
     __tablename__ = "promocodes"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -240,7 +239,6 @@ class PromoCode(Base):
 
 
 class PromoActivation(Base):
-    """Активация промокода."""
     __tablename__ = "promo_activations"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -252,7 +250,6 @@ class PromoActivation(Base):
 
 
 class Reward(Base):
-    """Награда за топ по балансу."""
     __tablename__ = "rewards"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -264,7 +261,6 @@ class Reward(Base):
 
 
 class PvpReward(Base):
-    """Старая награда PvP."""
     __tablename__ = "pvp_rewards"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -276,7 +272,6 @@ class PvpReward(Base):
 
 
 class AdminRole(Base):
-    """Роль админа."""
     __tablename__ = "admin_roles"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -291,7 +286,6 @@ class AdminRole(Base):
 
 
 class Ban(Base):
-    """Запись о наказании."""
     __tablename__ = "bans"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -310,7 +304,6 @@ class Ban(Base):
 
 
 class ActionLog(Base):
-    """Лог действий игрока."""
     __tablename__ = "action_logs"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -321,7 +314,6 @@ class ActionLog(Base):
 
 
 class DailyStats(Base):
-    """Снимок метрик за день."""
     __tablename__ = "daily_stats"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -341,7 +333,6 @@ class DailyStats(Base):
 
 
 class Referral(Base):
-    """Реферальная связь."""
     __tablename__ = "referrals"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -352,7 +343,6 @@ class Referral(Base):
 
 
 class Subscription(Base):
-    """Подписка Indy+."""
     __tablename__ = "subscriptions"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -370,7 +360,6 @@ class Subscription(Base):
 
 
 class SubscriptionPayment(Base):
-    """История платежей Indy+."""
     __tablename__ = "subscription_payments"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -386,7 +375,6 @@ class SubscriptionPayment(Base):
 
 
 class PlusReward(Base):
-    """Ежемесячная награда подписчикам."""
     __tablename__ = "plus_rewards"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -399,7 +387,6 @@ class PlusReward(Base):
 
 
 class Loan(Base):
-    """Кредит игрока."""
     __tablename__ = "loans"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -416,7 +403,6 @@ class Loan(Base):
 
 
 class LoanPayment(Base):
-    """Платёж по кредиту."""
     __tablename__ = "loan_payments"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -425,61 +411,38 @@ class LoanPayment(Base):
     paid_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
-# ═════════════════════════════════════════════
-# SUPPORT SYSTEM (1.2.0)
-# ═════════════════════════════════════════════
-
 class Ticket(Base):
-    """Тикет поддержки."""
     __tablename__ = "tickets"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False, index=True,
-    )
-    assigned_to: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True, index=True,
-    )
-
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    assigned_to: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     subject: Mapped[str] = mapped_column(String(128), nullable=False)
     category: Mapped[str] = mapped_column(String(32), nullable=False)
     priority: Mapped[str] = mapped_column(String(16), default="normal")
     status: Mapped[str] = mapped_column(String(16), default="open", index=True)
-
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now(),
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    closed_by: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
-    )
+    closed_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
 
 class TicketMessage(Base):
-    """Сообщение в тикете."""
     __tablename__ = "ticket_messages"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    ticket_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("tickets.id", ondelete="CASCADE"),
-        nullable=False, index=True,
-    )
-    sender_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-    )
+    ticket_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False, index=True)
+    sender_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     is_staff: Mapped[bool] = mapped_column(Boolean, default=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True) 
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+
+
 # ═════════════════════════════════════════════
-# FRIENDS SYSTEM (1.3.0)
+# FRIENDS (1.3.0)
 # ═════════════════════════════════════════════
 
 class Friend(Base):
-    """Дружеская связь (двусторонняя — 2 записи)."""
     __tablename__ = "friends"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -491,7 +454,6 @@ class Friend(Base):
 
 
 class FriendRequest(Base):
-    """Заявка в друзья."""
     __tablename__ = "friend_requests"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
