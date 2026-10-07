@@ -60,14 +60,14 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# Trade (1.3.1)
-TRADE_MAX_CARDS: int = 5
-TRADE_MAX_MONEY: int = 1_000_000
-TRADE_TIMEOUT_HOURS: int = 24
+   # Trade (1.3.1)
+   TRADE_MAX_CARDS: int = 5
+   TRADE_MAX_MONEY: int = 1_000_000
+   TRADE_TIMEOUT_HOURS: int = 24
 
 # Auction (1.3.2)
-AUCTION_MIN_STEP_PERCENT: float = 0.05
-AUCTION_COMMISSION: float = 10.0
-AUCTION_COMMISSION_PLUS: float = 5.0
-AUCTION_MIN_PRICE: int = 10
-AUCTION_MAX_PRICE: int = 10_000_000
+   AUCTION_MIN_STEP_PERCENT: float = 0.05
+   AUCTION_COMMISSION: float = 10.0
+   AUCTION_COMMISSION_PLUS: float = 5.0
+   AUCTION_MIN_PRICE: int = 10
+   AUCTION_MAX_PRICE: int = 10_000_000
