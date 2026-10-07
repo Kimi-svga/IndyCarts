@@ -474,3 +474,31 @@ class TicketMessage(Base):
     is_staff: Mapped[bool] = mapped_column(Boolean, default=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True) 
+# ═════════════════════════════════════════════
+# FRIENDS SYSTEM (1.3.0)
+# ═════════════════════════════════════════════
+
+class Friend(Base):
+    """Дружеская связь (двусторонняя — 2 записи)."""
+    __tablename__ = "friends"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    friend_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("user_id", "friend_id", name="uq_friend_pair"),)
+
+
+class FriendRequest(Base):
+    """Заявка в друзья."""
+    __tablename__ = "friend_requests"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    from_user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    to_user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (UniqueConstraint("from_user_id", "to_user_id", name="uq_freq_pair"),)
