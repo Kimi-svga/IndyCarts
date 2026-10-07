@@ -1,4 +1,4 @@
-"""Клавиатуры раздела друзей."""
+"""Клавиатуры раздела друзей (с кнопкой «🃏 Обмен»)."""
 
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardMarkup
@@ -48,18 +48,40 @@ def get_back_to_friends() -> InlineKeyboardMarkup:
 
 def get_request_actions(request_id: int) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text="✅ Принять", callback_data=FriendsMenu(action="accept", request_id=request_id).pack())
-    b.button(text="❌ Отклонить", callback_data=FriendsMenu(action="reject", request_id=request_id).pack())
-    b.button(text="🔙 К друзьям", callback_data=FriendsMenu(action="menu").pack())
+    b.button(
+        text="✅ Принять",
+        callback_data=FriendsMenu(action="accept", request_id=request_id).pack(),
+    )
+    b.button(
+        text="❌ Отклонить",
+        callback_data=FriendsMenu(action="reject", request_id=request_id).pack(),
+    )
+    b.button(
+        text="🔙 К друзьям",
+        callback_data=FriendsMenu(action="menu").pack(),
+    )
     b.adjust(2, 1)
     return b.as_markup()
 
 
 def get_friend_actions(user_id: int) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text="⚔️ Вызвать на PvP", callback_data=FriendsMenu(action="duel", user_id=user_id).pack())
-    b.button(text="❌ Удалить", callback_data=FriendsMenu(action="remove", user_id=user_id).pack())
-    b.button(text="🔙 К друзьям", callback_data=FriendsMenu(action="menu").pack())
+    b.button(
+        text="⚔️ Вызвать на PvP",
+        callback_data=FriendsMenu(action="duel", user_id=user_id).pack(),
+    )
+    b.button(
+        text="🃏 Обмен",
+        callback_data=FriendsMenu(action="trade", user_id=user_id).pack(),
+    )
+    b.button(
+        text="❌ Удалить",
+        callback_data=FriendsMenu(action="remove", user_id=user_id).pack(),
+    )
+    b.button(
+        text="🔙 К друзьям",
+        callback_data=FriendsMenu(action="menu").pack(),
+    )
     b.adjust(1)
     return b.as_markup()
 
@@ -67,12 +89,25 @@ def get_friend_actions(user_id: int) -> InlineKeyboardMarkup:
 def get_user_actions(user_id: int, is_friend: bool = False, request_sent: bool = False) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     if is_friend:
-        b.button(text="⚔️ Вызвать на PvP", callback_data=FriendsMenu(action="duel", user_id=user_id).pack())
+        b.button(
+            text="⚔️ Вызвать на PvP",
+            callback_data=FriendsMenu(action="duel", user_id=user_id).pack(),
+        )
+        b.button(
+            text="🃏 Обмен",
+            callback_data=FriendsMenu(action="trade", user_id=user_id).pack(),
+        )
         b.button(text="✅ Уже в друзьях", callback_data="noop")
     elif request_sent:
         b.button(text="⏳ Заявка отправлена", callback_data="noop")
     else:
-        b.button(text="➕ Добавить в друзья", callback_data=FriendsMenu(action="add", user_id=user_id).pack())
-    b.button(text="🔙 К друзьям", callback_data=FriendsMenu(action="menu").pack())
+        b.button(
+            text="➕ Добавить в друзья",
+            callback_data=FriendsMenu(action="add", user_id=user_id).pack(),
+        )
+    b.button(
+        text="🔙 К друзьям",
+        callback_data=FriendsMenu(action="menu").pack(),
+    )
     b.adjust(1)
-    return b.as_markup()
+    return b.as_markup() 
