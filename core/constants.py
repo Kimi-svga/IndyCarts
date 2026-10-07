@@ -231,3 +231,57 @@ TICKET_STATUSES = {
 TICKET_COOLDOWN_MINUTES = 15
 TICKET_MAX_OPEN = 2
 TICKET_AUTO_CLOSE_HOURS = 72 
+
+# ─────────────────────────────────────────────
+# Trade (1.3.1)
+# ─────────────────────────────────────────────
+
+TRADE_MAX_CARDS = 5
+TRADE_MAX_MONEY = 1_000_000
+TRADE_TIMEOUT_HOURS = 24
+
+TRADE_STATUSES = {
+    "pending": "⏳ ожидает",
+    "accepted": "✅ принят",
+    "declined": "❌ отклонён",
+    "cancelled": "🚫 отменён",
+    "expired": "⌛ истёк",
+}
+
+# ─────────────────────────────────────────────
+# Auction (1.3.2)
+# ─────────────────────────────────────────────
+
+AUCTION_DURATIONS = {
+    "1h": ("1 час", 1),
+    "6h": ("6 часов", 6),
+    "24h": ("24 часа", 24),
+    "3d": ("3 дня", 72),
+}
+
+AUCTION_MIN_BID_STEP = 0.05
+AUCTION_COMMISSION = 10.0
+AUCTION_COMMISSION_PLUS = 5.0
+
+AUCTION_STATUSES = {
+    "active": "🟢 активен",
+    "sold": "✅ продан",
+    "cancelled": "🚫 отменён",
+    "expired": "⌛ истёк",
+}
+
+# ─── Обновлённое главное меню ───
+
+MAIN_MENU_BUTTONS = [
+    ("👤 Профиль",   "profile"),
+    ("🃏 Карты",     "cards"),
+    ("💹 Биржа",     "market"),
+    ("🎯 Аукцион",   "auction"),
+    ("🛒 Магазин",   "shop"),
+    ("⚔️ PvP",       "pvp"),
+    ("🏦 Банк",      "bank"),
+    ("🏆 Рейтинг",   "rating"),
+    ("👥 Рефералка", "ref"),
+    ("📅 Ежедневка", "daily"),
+    ("💎 Indy+",     "plus"),
+]
