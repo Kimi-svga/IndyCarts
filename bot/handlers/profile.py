@@ -1,4 +1,4 @@
-"""Профиль игрока (с разделом друзей)."""
+"""Профиль игрока (с разделом друзей, патч 1.3.0)."""
 
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
@@ -60,4 +60,4 @@ async def cb_profile(query: CallbackQuery) -> None:
         f"👥 Друзей: <b>{friends_count}</b>"
     )
 
-    await safe_render(query, text, get_profile_menu(friends_count, incoming_count))
+    await safe_render(query, text, get_profile_menu(friends_count, incoming_count)) 
