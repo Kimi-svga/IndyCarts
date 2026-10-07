@@ -15,11 +15,12 @@ from sqlalchemy import func, select
 
 from bot.handlers import (
     admin, admin_bans, admin_broadcast, admin_tools,
-    bank, cards, daily, help, market, menu, plus, profile,
+    bank, cards, daily, friends, help, market, menu, plus, profile,
     promo, pvp, rating, ref, roles, shop, start, stats,
     support, support_panel,
 )
 from bot.middlewares.ban import BanMiddleware
+from bot.middlewares.last_seen import LastSeenMiddleware
 from bot.middlewares.logger import LoggingMiddleware
 from bot.middlewares.user import UserMiddleware
 from core.config import settings
@@ -42,10 +43,12 @@ dp = Dispatcher(storage=storage)
 
 dp.message.middleware(LoggingMiddleware())
 dp.message.middleware(UserMiddleware())
+dp.message.middleware(LastSeenMiddleware())
 dp.message.middleware(BanMiddleware())
 
 dp.callback_query.middleware(LoggingMiddleware())
 dp.callback_query.middleware(UserMiddleware())
+dp.callback_query.middleware(LastSeenMiddleware())
 dp.callback_query.middleware(BanMiddleware())
 dp.callback_query.middleware(CallbackAnswerMiddleware())
 
@@ -55,6 +58,7 @@ for r in (
     admin_broadcast, roles, shop, ref, stats,
     plus,
     support, support_panel, help,
+    friends,
     menu,
 ):
     dp.include_router(r.router)
@@ -503,7 +507,7 @@ async def tickets_auto_close_task() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 Запуск Indy Carts v1.2.0...")
+    logger.info("🚀 Запуск Indy Carts v1.3.0...")
 
     await init_db()
 
@@ -534,7 +538,7 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Остановлен")
 
 
-app = FastAPI(title="Indy Carts", version="1.2.0", lifespan=lifespan)
+app = FastAPI(title="Indy Carts", version="1.3.0", lifespan=lifespan)
 
 
 @app.post("/webhook")
@@ -559,7 +563,7 @@ async def health() -> dict:
         me = await bot.get_me()
         return {
             "status": "ok",
-            "version": "1.2.0",
+            "version": "1.3.0",
             "bot": me.username,
             "webhook": info.url,
         }
