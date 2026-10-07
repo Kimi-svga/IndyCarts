@@ -1,16 +1,17 @@
-"""Клавиатура профиля."""
+"""Клавиатура профиля (патч 1.3.0 — раздел друзей)."""
 
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from bot.keyboards.main import MainMenu
 from bot.keyboards.friends import FriendsMenu
+from bot.keyboards.main import MainMenu
 
 
 def get_profile_menu(
     friends_count: int = 0,
     incoming: int = 0,
 ) -> InlineKeyboardMarkup:
+    """Клавиатура профиля с разделом друзей."""
     b = InlineKeyboardBuilder()
 
     friends_text = f"👥 Друзья ({friends_count})"
