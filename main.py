@@ -15,20 +15,23 @@ from sqlalchemy import func, select
 
 from bot.handlers import (
     admin, admin_bans, admin_broadcast, admin_tools,
-    bank, cards, daily, friends, help, market, menu, plus, profile,
+    auction, bank, cards, daily, friends, help, market, menu, plus, profile,
     promo, pvp, rating, ref, roles, shop, start, stats,
-    support, support_panel,
+    support, support_panel, trade,
 )
 from bot.middlewares.ban import BanMiddleware
 from bot.middlewares.last_seen import LastSeenMiddleware
 from bot.middlewares.logger import LoggingMiddleware
 from bot.middlewares.user import UserMiddleware
 from core.config import settings
-from core.constants import PVP_SEASON_REWARDS
+from core.constants import (
+    AUCTION_COMMISSION, AUCTION_COMMISSION_PLUS, PVP_SEASON_REWARDS,
+)
 from core.logger import setup_logger
 from db.models import (
-    Card, DailyStats, Loan, PlusReward, PvpBattle, PvpSeason,
-    PvpStake, SeasonReward, Subscription, Ticket, User, UserCard, UserSeasonStat,
+    Auction, AuctionBid, Card, DailyStats, Loan, PlusReward, PvpBattle,
+    PvpSeason, PvpStake, SeasonReward, Subscription, Ticket, User,
+    UserCard, UserSeasonStat,
 )
 from db.session import AsyncSessionLocal, close_db, init_db
 
@@ -58,7 +61,7 @@ for r in (
     admin_broadcast, roles, shop, ref, stats,
     plus,
     support, support_panel, help,
-    friends,
+    friends, trade, auction,
     menu,
 ):
     dp.include_router(r.router)
@@ -404,6 +407,72 @@ async def pvp_timeout_task() -> None:
             logger.error(f"pvp_timeout: {e}")
 
 
+async def auction_close_task() -> None:
+    while True:
+        await asyncio.sleep(300)
+        try:
+            async with AsyncSessionLocal() as session:
+                now = datetime.utcnow()
+                expired = (await session.execute(
+                    select(Auction).where(
+                        Auction.status == "active",
+                        Auction.ends_at < now,
+                    )
+                )).scalars().all()
+
+                for lot in expired:
+                    if lot.current_bidder_id:
+                        winner = await session.get(User, lot.current_bidder_id)
+                        seller = await session.get(User, lot.seller_id)
+
+                        commission = (
+                            AUCTION_COMMISSION_PLUS
+                            if seller.plus_tier == "indy_plus"
+                            else AUCTION_COMMISSION
+                        )
+                        fee = int(lot.current_bid * commission / 100)
+                        seller.balance += lot.current_bid - fee
+
+                        uc = await session.get(UserCard, lot.user_card_id)
+                        if uc:
+                            uc.user_id = winner.id
+                            uc.is_locked = False
+
+                        lot.status = "sold"
+                        lot.sold_at = now
+
+                        try:
+                            await bot.send_message(
+                                winner.telegram_id,
+                                f"🏆 <b>Ты выиграл лот #{lot.id}!</b>\n\n"
+                                f"Ставка: <b>{lot.current_bid:,}</b>",
+                                parse_mode="HTML",
+                            )
+                        except Exception:
+                            pass
+                        try:
+                            await bot.send_message(
+                                seller.telegram_id,
+                                f"💰 <b>Лот #{lot.id} продан!</b>\n\n"
+                                f"Цена: <b>{lot.current_bid:,}</b>\n"
+                                f"Комиссия: <b>{fee:,}</b>",
+                                parse_mode="HTML",
+                            )
+                        except Exception:
+                            pass
+                    else:
+                        lot.status = "expired"
+                        uc = await session.get(UserCard, lot.user_card_id)
+                        if uc:
+                            uc.is_locked = False
+
+                await session.commit()
+                if expired:
+                    logger.info(f"🎯 Закрыто лотов: {len(expired)}")
+        except Exception as e:
+            logger.error(f"auction_close: {e}")
+
+
 async def daily_stats_task() -> None:
     while True:
         await asyncio.sleep(3600)
@@ -507,7 +576,7 @@ async def tickets_auto_close_task() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 Запуск Indy Carts v1.3.0...")
+    logger.info("🚀 Запуск Indy Carts v1.3.2...")
 
     await init_db()
 
@@ -518,6 +587,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(plus_monthly_rewards_task())
     asyncio.create_task(pvp_season_task())
     asyncio.create_task(pvp_timeout_task())
+    asyncio.create_task(auction_close_task())
     asyncio.create_task(daily_stats_task())
     asyncio.create_task(ban_expire_task())
     asyncio.create_task(tickets_auto_close_task())
@@ -538,7 +608,7 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Остановлен")
 
 
-app = FastAPI(title="Indy Carts", version="1.3.0", lifespan=lifespan)
+app = FastAPI(title="Indy Carts", version="1.3.2", lifespan=lifespan)
 
 
 @app.post("/webhook")
@@ -563,7 +633,7 @@ async def health() -> dict:
         me = await bot.get_me()
         return {
             "status": "ok",
-            "version": "1.3.0",
+            "version": "1.3.2",
             "bot": me.username,
             "webhook": info.url,
         }
