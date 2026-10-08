@@ -90,6 +90,7 @@ MAIN_MENU_BUTTONS = [
     ("🛒 Магазин",   "shop"),
     ("⚔️ PvP",       "pvp"),
     ("🏦 Банк",      "bank"),
+    ("🏰 Кланы",     "clans"),
     ("🏆 Рейтинг",   "rating"),
     ("👥 Рефералка", "ref"),
     ("📅 Ежедневка", "daily"),
@@ -292,4 +293,76 @@ AUCTION_STATUSES = {
     "sold": "✅ продан",
     "cancelled": "🚫 отменён",
     "expired": "⌛ истёк",
-} 
+}
+
+
+# ─────────────────────────────────────────────
+# Clans (v1.5.0)
+# ─────────────────────────────────────────────
+
+CLAN_MIN_LEVEL = 1
+CLAN_MAX_LEVEL = 10
+
+CLAN_NAME_MIN = 3
+CLAN_NAME_MAX = 24
+CLAN_TAG_MIN = 2
+CLAN_TAG_MAX = 4
+CLAN_DESC_MAX = 200
+
+CLAN_CREATE_PRICE = 200_000
+CLAN_TOP_LIMIT = 10
+
+CLAN_ROLES = ["leader", "officer", "member"]
+
+CLAN_ROLE_LEVELS = {
+    "leader": 100,
+    "officer": 60,
+    "member": 10,
+}
+
+CLAN_ROLE_EMOJI = {
+    "leader": "👑",
+    "officer": "⚔️",
+    "member": "👤",
+}
+
+CLAN_ROLE_NAMES = {
+    "leader": "Лидер",
+    "officer": "Офицер",
+    "member": "Участник",
+}
+
+# 10 уровней клана.
+# xp_required — XP, чтобы ДОСТИЧЬ этого уровня.
+# max_members — лимит участников.
+# drop_bonus / money_bonus — % бонус к дропу / деньгам.
+# auction_discount — % скидка на комиссию аукциона.
+# extra_attempts — доп. попытки в день каждому участнику.
+
+CLAN_LEVELS = {
+    1:  {"xp_required": 0,          "max_members": 10, "drop_bonus": 0.00, "money_bonus": 0.00, "auction_discount": 0.0, "extra_attempts": 0},
+    2:  {"xp_required": 50_000,     "max_members": 15, "drop_bonus": 0.05, "money_bonus": 0.05, "auction_discount": 0.5, "extra_attempts": 0},
+    3:  {"xp_required": 150_000,    "max_members": 20, "drop_bonus": 0.10, "money_bonus": 0.10, "auction_discount": 1.0, "extra_attempts": 0},
+    4:  {"xp_required": 350_000,    "max_members": 25, "drop_bonus": 0.15, "money_bonus": 0.15, "auction_discount": 1.5, "extra_attempts": 1},
+    5:  {"xp_required": 750_000,    "max_members": 30, "drop_bonus": 0.20, "money_bonus": 0.20, "auction_discount": 2.0, "extra_attempts": 1},
+    6:  {"xp_required": 1_500_000,  "max_members": 35, "drop_bonus": 0.25, "money_bonus": 0.25, "auction_discount": 2.5, "extra_attempts": 2},
+    7:  {"xp_required": 3_000_000,  "max_members": 40, "drop_bonus": 0.30, "money_bonus": 0.30, "auction_discount": 3.0, "extra_attempts": 2},
+    8:  {"xp_required": 6_000_000,  "max_members": 45, "drop_bonus": 0.35, "money_bonus": 0.35, "auction_discount": 3.5, "extra_attempts": 3},
+    9:  {"xp_required": 12_000_000, "max_members": 50, "drop_bonus": 0.40, "money_bonus": 0.40, "auction_discount": 4.0, "extra_attempts": 3},
+    10: {"xp_required": 25_000_000, "max_members": 50, "drop_bonus": 0.50, "money_bonus": 0.50, "auction_discount": 5.0, "extra_attempts": 5},
+}
+
+CLAN_INVITE_TIMEOUT_HOURS = 48
+CLAN_MAX_INVITES_PENDING = 20
+
+CLAN_ACTIONS = {
+    "create":    "🏰 Создание клана",
+    "join":      "📥 Вступление",
+    "leave":     "📤 Выход",
+    "deposit":   "💰 Вклад в казну",
+    "kick":      "🚪 Исключение",
+    "promote":   "⬆️ Повышение",
+    "demote":    "⬇️ Понижение",
+    "level_up":  "🎉 Новый уровень",
+    "disband":   "💥 Расформирование",
+}
