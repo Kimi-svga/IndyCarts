@@ -142,14 +142,27 @@ def get_delete_confirm(card_id: int) -> InlineKeyboardMarkup:
     return b.as_markup()
 
 
-def get_card_list_nav(index: int, total_pages: int) -> InlineKeyboardMarkup:
-    b = InlineKeyboardBuilder()
+def attach_card_list_nav(
+    b: InlineKeyboardBuilder,
+    index: int,
+    total_pages: int,
+) -> None:
+    """
+    Прикрепляет к builder-у навигацию по списку.
+    Возвращает None. Мутирует b.
+    """
+    nav = InlineKeyboardBuilder()
     if index > 0:
-        b.button(text="⬅️", callback_data=ACard(action="list", index=index - 1).pack())
-    b.button(text=f"{index + 1}/{total_pages}", callback_data="noop")
+        nav.button(text="⬅️", callback_data=ACard(action="list", index=index - 1).pack())
+    nav.button(text=f"{index + 1}/{total_pages}", callback_data="noop")
     if index < total_pages - 1:
-        b.button(text="➡️", callback_data=ACard(action="list", index=index + 1).pack())
-    b.button(text="🔍 Поиск", callback_data=ACard(action="search").pack())
-    b.button(text="🔙 В админку", callback_data=MainMenu(action="admin_panel"))
-    b.adjust(3, 1, 1)
-    return b.as_markup()
+        nav.button(text="➡️", callback_data=ACard(action="list", index=index + 1).pack())
+    nav.adjust(3)
+
+    ctrl = InlineKeyboardBuilder()
+    ctrl.button(text="🔍 Поиск", callback_data=ACard(action="search").pack())
+    ctrl.button(text="🔙 В админку", callback_data=MainMenu(action="admin_panel"))
+    ctrl.adjust(2)
+
+    b.attach(nav)
+    b.attach(ctrl) 
