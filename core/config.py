@@ -75,5 +75,11 @@ class Settings(BaseSettings):
     CARD_TEAMS_PER_PAGE: int = 8
     CARD_YEARS_PER_PAGE: int = 8
 
+    # ─── Clans (v1.5.0) ───
+    CLAN_CREATE_PRICE: int = 200_000
+    CLAN_CREATE_FREE_FOR_PLUS: bool = True
+    CLAN_INVITE_TIMEOUT_HOURS: int = 48
+    CLAN_TOP_LIMIT: int = 10
 
-settings = Settings()
+
+settings = Settings() 
