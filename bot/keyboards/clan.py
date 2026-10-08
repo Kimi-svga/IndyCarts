@@ -16,11 +16,6 @@ class ClanMenu(CallbackData, prefix="cln"):
     index: int = 0
 
 
-class ClanCreate(ClanMenu):
-    """Не используется — просто наследование для типизации."""
-    pass
-
-
 # ═════════════════════════════════════════════
 # ГЛАВНЫЙ ЭКРАН (если не в клане)
 # ═════════════════════════════════════════════
@@ -303,4 +298,4 @@ def get_outgoing_menu(invites: list) -> InlineKeyboardMarkup:
         )
     b.button(text="🔙 Назад", callback_data=ClanMenu(action="menu").pack())
     b.adjust(1)
-    return b.as_markup() 
+    return b.as_markup()
