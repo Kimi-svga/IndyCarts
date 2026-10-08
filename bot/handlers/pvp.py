@@ -17,6 +17,7 @@ from core.constants import RARITY_EMOJI, RARITY_NAMES
 from core.logger import setup_logger
 from db.models import Card, PvpBattle, PvpSeason, PvpStake, User, UserCard
 from db.session import AsyncSessionLocal
+from services.clan import get_clan_bonuses, get_user_clan
 from services.pvp import (
     calculate_elo, calculate_pvp_money_prize, get_rank_title,
 )
@@ -70,6 +71,15 @@ async def cb_pvp(query: CallbackQuery) -> None:
             )
             return
 
+        # Клановый бонус PvP
+        clan, _ = await get_user_clan(session, user.id)
+        clan_line = ""
+        if clan is not None:
+            bonuses = get_clan_bonuses(clan.level)
+            pvp_bonus = bonuses.auction_discount / 10  # 0.0–0.5
+            if pvp_bonus > 0:
+                clan_line = f"\n🏰 <b>Клан-бонус PvP:</b> +{pvp_bonus * 100:.0f}%"
+
     title = get_rank_title(user.pvp_rating)
     season_text = "не активен"
     if season:
@@ -81,7 +91,8 @@ async def cb_pvp(query: CallbackQuery) -> None:
         f"📊 Рейтинг: <b>{user.pvp_rating}</b>\n"
         f"🏅 Титул: {title}\n"
         f"📈 Сезон: <b>{season_text}</b>\n"
-        f"📊 Всего: <b>{user.pvp_wins_total}W / {user.pvp_losses_total}L</b>\n\n"
+        f"📊 Всего: <b>{user.pvp_wins_total}W / {user.pvp_losses_total}L</b>"
+        f"{clan_line}\n\n"
         f"━━━━━━━━━━━━━━━━━━\n\n"
         f"<b>Ставка:</b> до {settings.PVP_MAX_STAKES_PER_SIDE} карт с каждой стороны\n"
         f"<b>Деньги:</b> {settings.PVP_FEE} монет с каждого\n"
@@ -136,7 +147,6 @@ async def cmd_duel(message: Message) -> None:
             await message.answer(f"❌ Нужно {settings.PVP_FEE} монет")
             return
 
-        # Активный сезон
         season = (await session.execute(
             select(PvpSeason).where(PvpSeason.is_active == True)
         )).scalar_one_or_none()
@@ -155,7 +165,6 @@ async def cmd_duel(message: Message) -> None:
         opponent_tg = opponent.telegram_id
         challenger_name = challenger.username
 
-    # ── Уведомление OPPONENT ──
     b_opp = InlineKeyboardBuilder()
     b_opp.button(
         text="✅ Принять",
@@ -181,7 +190,6 @@ async def cmd_duel(message: Message) -> None:
         await message.answer("❌ Не удалось отправить вызов")
         return
 
-    # ── Уведомление CHALLENGER (с кнопкой выбора карт) ──
     b_ch = InlineKeyboardBuilder()
     b_ch.button(
         text="🎴 Выбрать свои карты",
@@ -215,7 +223,6 @@ async def cb_pvp_decline(query: CallbackQuery, callback_data: PvpAction) -> None
         if battle:
             battle.status = "declined"
 
-            # Разблокировать все карты
             stakes = (await session.execute(
                 select(PvpStake).where(PvpStake.battle_id == battle.id)
             )).scalars().all()
@@ -253,7 +260,6 @@ async def cb_pvp_choose(query: CallbackQuery, callback_data: PvpAction) -> None:
 
 
 async def _show_card_picker(query: CallbackQuery, battle_id: int, index: int) -> None:
-    """Карусель карт для выбора ставки."""
     async with AsyncSessionLocal() as session:
         user = (await session.execute(
             select(User).where(User.telegram_id == query.from_user.id)
@@ -262,7 +268,6 @@ async def _show_card_picker(query: CallbackQuery, battle_id: int, index: int) ->
         if user is None:
             return
 
-        # Проверяем, что бой существует и пользователь — участник
         battle = (await session.execute(
             select(PvpBattle).where(PvpBattle.id == battle_id)
         )).scalar_one_or_none()
@@ -373,7 +378,6 @@ async def cb_pvp_toggle(query: CallbackQuery) -> None:
 
         side = "challenger" if battle.challenger_id == user.id else "opponent"
 
-        # Уже в стаке?
         existing = (await session.execute(
             select(PvpStake).where(
                 PvpStake.battle_id == battle_id,
@@ -387,7 +391,6 @@ async def cb_pvp_toggle(query: CallbackQuery) -> None:
             if uc:
                 uc.is_locked = False
         else:
-            # Лимит
             count = (await session.execute(
                 select(PvpStake).where(
                     PvpStake.battle_id == battle_id,
@@ -456,7 +459,6 @@ async def cb_pvp_ready(query: CallbackQuery, callback_data: PvpAction) -> None:
 
         side = "challenger" if battle.challenger_id == user.id else "opponent"
 
-        # Сколько карт выбрал?
         stakes = (await session.execute(
             select(PvpStake).where(
                 PvpStake.battle_id == battle_id,
@@ -473,7 +475,6 @@ async def cb_pvp_ready(query: CallbackQuery, callback_data: PvpAction) -> None:
         else:
             battle.opponent_ready = True
 
-        # Оба готовы?
         if battle.challenger_ready and battle.opponent_ready:
             should_run = True
 
@@ -487,7 +488,6 @@ async def cb_pvp_ready(query: CallbackQuery, callback_data: PvpAction) -> None:
             )
             return
 
-    # ── Бой запускается ──
     if should_run:
         await safe_render(
             query,
@@ -498,11 +498,10 @@ async def cb_pvp_ready(query: CallbackQuery, callback_data: PvpAction) -> None:
 
 
 # ═════════════════════════════════════════════
-# АВТОМАТИЧЕСКИЙ БОЙ
+# АВТОМАТИЧЕСКИЙ БОЙ (с клановым бонусом)
 # ═════════════════════════════════════════════
 
 async def _run_battle_async(battle_id: int, bot) -> None:
-    """Проводит бой и рассылает результаты."""
     async with AsyncSessionLocal() as session:
         battle = (await session.execute(
             select(PvpBattle).where(PvpBattle.id == battle_id)
@@ -517,7 +516,6 @@ async def _run_battle_async(battle_id: int, bot) -> None:
         if challenger is None or opponent is None:
             return
 
-        # Кубы
         cr = random.randint(1, 6) + random.randint(1, 6)
         orr = random.randint(1, 6) + random.randint(1, 6)
         while cr == orr:
@@ -526,7 +524,6 @@ async def _run_battle_async(battle_id: int, bot) -> None:
 
         winner, loser = (challenger, opponent) if cr > orr else (opponent, challenger)
 
-        # Эло
         elo = calculate_elo(winner.pvp_rating, loser.pvp_rating)
         winner_delta = elo.winner_delta
         loser_delta = elo.loser_delta
@@ -536,6 +533,22 @@ async def _run_battle_async(battle_id: int, bot) -> None:
             winner_delta = int(winner_delta * settings.PLUS_PVP_MULTIPLIER)
         if loser.plus_tier == "indy_plus":
             loser_delta = int(loser_delta / settings.PLUS_PVP_MULTIPLIER)
+
+        # ─── КЛАНОВЫЙ МНОЖИТЕЛЬ ───
+        winner_clan, _ = await get_user_clan(session, winner.id)
+        loser_clan, _ = await get_user_clan(session, loser.id)
+
+        if winner_clan is not None:
+            wb = get_clan_bonuses(winner_clan.level)
+            pvp_bonus = wb.auction_discount / 10  # 0.0–0.5
+            if pvp_bonus > 0:
+                winner_delta = int(winner_delta * (1 + pvp_bonus))
+
+        if loser_clan is not None:
+            lb = get_clan_bonuses(loser_clan.level)
+            pvp_shield = lb.auction_discount / 10
+            if pvp_shield > 0:
+                loser_delta = int(loser_delta / (1 + pvp_shield))
 
         winner.pvp_rating += winner_delta
         loser.pvp_rating += loser_delta
@@ -547,7 +560,6 @@ async def _run_battle_async(battle_id: int, bot) -> None:
         loser.pvp_losses += 1
         loser.pvp_losses_total += 1
 
-        # Карты: у проигравшего → победителю
         loser_side = "challenger" if loser.id == battle.challenger_id else "opponent"
         loser_stakes = (await session.execute(
             select(PvpStake).where(
@@ -564,7 +576,6 @@ async def _run_battle_async(battle_id: int, bot) -> None:
                 uc.is_locked = False
                 cards_transferred += 1
 
-        # Свои карты победителя разблокировать
         winner_side = "challenger" if winner.id == battle.challenger_id else "opponent"
         winner_stakes = (await session.execute(
             select(PvpStake).where(
@@ -578,7 +589,6 @@ async def _run_battle_async(battle_id: int, bot) -> None:
             if uc:
                 uc.is_locked = False
 
-        # Деньги
         money_prize = calculate_pvp_money_prize(
             battle.money_stake, battle.money_stake,
             commission=settings.PVP_BANK_COMMISSION,
@@ -590,24 +600,20 @@ async def _run_battle_async(battle_id: int, bot) -> None:
         winner.pvp_money_staked += battle.money_stake
         loser.pvp_money_staked += battle.money_stake
 
-        # Финал
         battle.status = "finished"
         battle.challenger_roll = cr
         battle.opponent_roll = orr
         battle.winner_id = winner.id
         battle.finished_at = datetime.utcnow()
 
-        # Данные для сообщений
         c_name = challenger.username
         o_name = opponent.username
         w_name = winner.username
         challenger_tg = challenger.telegram_id
         opponent_tg = opponent.telegram_id
-        winner_id = winner.id
 
         await session.commit()
 
-    # ── Уведомления ──
     result_text = (
         f"⚔️ <b>Дуэль завершена!</b>\n\n"
         f"🎲 @{c_name}: <b>{cr}</b>\n"
@@ -625,10 +631,6 @@ async def _run_battle_async(battle_id: int, bot) -> None:
             logger.error(f"Не удалось отправить результат боя: {e}")
 
 
-# ═════════════════════════════════════════════
-# СЛУЖЕБНЫЕ
-# ═════════════════════════════════════════════
-
 @router.callback_query(F.data == "noop")
 async def cb_noop(query: CallbackQuery) -> None:
-    await safe_answer(query) 
+    await safe_answer(query)
