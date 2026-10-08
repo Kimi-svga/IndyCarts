@@ -8,7 +8,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy import delete, func, select
 
 from bot.keyboards.admin_cards import (
-    ACard, get_card_editor, get_card_list_nav, get_collection_menu,
+    ACard, attach_card_list_nav, get_card_editor, get_collection_menu,
     get_delete_confirm, get_price_menu, get_rarity_menu, get_team_menu,
     get_year_menu,
 )
@@ -82,7 +82,8 @@ async def _show_list(query: CallbackQuery, index: int) -> None:
             callback_data=ACard(action="view", card_id=c.id).pack(),
         )
     b.adjust(1)
-    b.attach(get_card_list_nav(index, total_pages))
+
+    attach_card_list_nav(b, index, total_pages)
 
     await safe_render(query, text, b.as_markup())
 
@@ -230,7 +231,6 @@ async def cb_set_rarity(query: CallbackQuery, callback_data: ACard) -> None:
             card.rarity = callback_data.value
             await session.commit()
 
-    await safe_answer(query, "✅ Редкость обновлена")
     await cb_view(query, ACard(action="view", card_id=callback_data.card_id))
 
 
@@ -270,7 +270,6 @@ async def cb_set_team(query: CallbackQuery, callback_data: ACard) -> None:
             card.team = callback_data.value
             await session.commit()
 
-    await safe_answer(query, "✅ Команда обновлена")
     await cb_view(query, ACard(action="view", card_id=callback_data.card_id))
 
 
@@ -345,7 +344,6 @@ async def cb_set_year(query: CallbackQuery, callback_data: ACard) -> None:
             card.year = int(callback_data.value)
             await session.commit()
 
-    await safe_answer(query, "✅ Год обновлён")
     await cb_view(query, ACard(action="view", card_id=callback_data.card_id))
 
 
@@ -431,7 +429,6 @@ async def cb_price_delta(query: CallbackQuery, callback_data: ACard) -> None:
         else:
             new = 0
 
-    await safe_answer(query, f"✅ Цена: {new:,}", show_alert=False)
     await safe_render(
         query,
         f"💰 <b>Цена</b>\n\nТекущая: <b>{new:,}</b>",
@@ -577,7 +574,6 @@ async def cb_set_collection(query: CallbackQuery, callback_data: ACard) -> None:
             card.collection_id = cid
             await session.commit()
 
-    await safe_answer(query, "✅ Коллекция обновлена")
     await cb_view(query, ACard(action="view", card_id=callback_data.card_id))
 
 
@@ -639,12 +635,7 @@ async def cb_toggle_drop(query: CallbackQuery, callback_data: ACard) -> None:
         if card:
             card.in_drop = not card.in_drop
             await session.commit()
-            new_state = card.in_drop
-        else:
-            new_state = True
 
-    text = "✅ Карта возвращена в дроп" if new_state else "🚫 Карта убрана из дропа"
-    await safe_answer(query, text, show_alert=False)
     await cb_view(query, ACard(action="view", card_id=callback_data.card_id))
 
 
