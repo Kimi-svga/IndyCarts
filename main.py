@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request, Response
 from sqlalchemy import func, select
 
 from bot.handlers import (
-    admin, admin_bans, admin_broadcast, admin_tools,
+    admin, admin_bans, admin_broadcast, admin_cards, admin_tools,
     auction, bank, cards, daily, friends, help, market, menu, plus, profile,
     promo, pvp, rating, ref, roles, shop, start, stats,
     support, support_panel, trade,
@@ -29,7 +29,7 @@ from core.constants import (
 )
 from core.logger import setup_logger
 from db.models import (
-    Auction, AuctionBid, Card, DailyStats, Loan, PlusReward, PvpBattle,
+    Auction, Card, DailyStats, Loan, PlusReward, PvpBattle,
     PvpSeason, PvpStake, SeasonReward, Subscription, Ticket, User,
     UserCard, UserSeasonStat,
 )
@@ -44,6 +44,7 @@ bot = Bot(
 )
 dp = Dispatcher(storage=storage)
 
+# ─── MIDDLEWARE ───
 dp.message.middleware(LoggingMiddleware())
 dp.message.middleware(UserMiddleware())
 dp.message.middleware(LastSeenMiddleware())
@@ -55,10 +56,11 @@ dp.callback_query.middleware(LastSeenMiddleware())
 dp.callback_query.middleware(BanMiddleware())
 dp.callback_query.middleware(CallbackAnswerMiddleware())
 
+# ─── РОУТЕРЫ ───
 for r in (
     start, profile, cards, daily, market, pvp,
     bank, rating, promo, admin, admin_bans, admin_tools,
-    admin_broadcast, roles, shop, ref, stats,
+    admin_broadcast, admin_cards, roles, shop, ref, stats,
     plus,
     support, support_panel, help,
     friends, trade, auction,
@@ -66,6 +68,10 @@ for r in (
 ):
     dp.include_router(r.router)
 
+
+# ═════════════════════════════════════════════
+# КРОН-ЗАДАЧИ
+# ═════════════════════════════════════════════
 
 async def save_prices_task() -> None:
     from db.models import PriceHistory
@@ -523,7 +529,6 @@ async def daily_stats_task() -> None:
 
 
 async def ban_expire_task() -> None:
-    from db.models import Ban
     while True:
         await asyncio.sleep(1800)
         try:
@@ -574,9 +579,13 @@ async def tickets_auto_close_task() -> None:
             logger.error(f"tickets_auto_close: {e}")
 
 
+# ═════════════════════════════════════════════
+# LIFESPAN
+# ═════════════════════════════════════════════
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 Запуск Indy Carts v1.3.2...")
+    logger.info("🚀 Запуск Indy Carts v1.4.0...")
 
     await init_db()
 
@@ -608,7 +617,7 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Остановлен")
 
 
-app = FastAPI(title="Indy Carts", version="1.3.2", lifespan=lifespan)
+app = FastAPI(title="Indy Carts", version="1.4.0", lifespan=lifespan)
 
 
 @app.post("/webhook")
@@ -633,7 +642,7 @@ async def health() -> dict:
         me = await bot.get_me()
         return {
             "status": "ok",
-            "version": "1.3.2",
+            "version": "1.4.0",
             "bot": me.username,
             "webhook": info.url,
         }
