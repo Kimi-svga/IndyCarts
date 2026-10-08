@@ -15,8 +15,8 @@ from sqlalchemy import func, select
 
 from bot.handlers import (
     admin, admin_bans, admin_broadcast, admin_cards, admin_tools,
-    auction, bank, cards, daily, friends, help, market, menu, plus, profile,
-    promo, pvp, rating, ref, roles, shop, start, stats,
+    auction, bank, cards, clan, daily, friends, help, market, menu, plus,
+    profile, promo, pvp, rating, ref, roles, shop, start, stats,
     support, support_panel, trade,
 )
 from bot.middlewares.ban import BanMiddleware
@@ -57,6 +57,8 @@ dp.callback_query.middleware(BanMiddleware())
 dp.callback_query.middleware(CallbackAnswerMiddleware())
 
 # ─── РОУТЕРЫ ───
+# ВАЖНО: clan идёт ПОСЛЕДНИМ, чтобы FSM-хендлеры clan
+# не перехватывали сообщения других модулей.
 for r in (
     start, profile, cards, daily, market, pvp,
     bank, rating, promo, admin, admin_bans, admin_tools,
@@ -65,6 +67,7 @@ for r in (
     support, support_panel, help,
     friends, trade, auction,
     menu,
+    clan,
 ):
     dp.include_router(r.router)
 
@@ -579,13 +582,39 @@ async def tickets_auto_close_task() -> None:
             logger.error(f"tickets_auto_close: {e}")
 
 
+async def clan_invites_expire_task() -> None:
+    """Протухание просроченных приглашений в кланы."""
+    from db.models import ClanInvite
+    while True:
+        await asyncio.sleep(3600)
+        try:
+            async with AsyncSessionLocal() as session:
+                now = datetime.utcnow()
+                expired = (await session.execute(
+                    select(ClanInvite).where(
+                        ClanInvite.status == "pending",
+                        ClanInvite.expires_at < now,
+                    )
+                )).scalars().all()
+
+                for inv in expired:
+                    inv.status = "expired"
+                    inv.resolved_at = now
+
+                if expired:
+                    await session.commit()
+                    logger.info(f"📨 Приглашений протухло: {len(expired)}")
+        except Exception as e:
+            logger.error(f"clan_invites_expire: {e}")
+
+
 # ═════════════════════════════════════════════
 # LIFESPAN
 # ═════════════════════════════════════════════
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 Запуск Indy Carts v1.4.0...")
+    logger.info("🚀 Запуск Indy Carts v1.5.0...")
 
     await init_db()
 
@@ -600,6 +629,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(daily_stats_task())
     asyncio.create_task(ban_expire_task())
     asyncio.create_task(tickets_auto_close_task())
+    asyncio.create_task(clan_invites_expire_task())
 
     webhook_url = f"{settings.WEBHOOK_URL}/webhook"
     await bot.set_webhook(
@@ -617,7 +647,7 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Остановлен")
 
 
-app = FastAPI(title="Indy Carts", version="1.4.0", lifespan=lifespan)
+app = FastAPI(title="Indy Carts", version="1.5.0", lifespan=lifespan)
 
 
 @app.post("/webhook")
@@ -642,7 +672,7 @@ async def health() -> dict:
         me = await bot.get_me()
         return {
             "status": "ok",
-            "version": "1.4.0",
+            "version": "1.5.0",
             "bot": me.username,
             "webhook": info.url,
         }
