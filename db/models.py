@@ -67,16 +67,13 @@ class User(Base):
     plus_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     priority_support: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    # Creator (1.2.0)
     can_create_cards: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     creator_cards_today: Mapped[int] = mapped_column(Integer, default=0)
     last_creator_card_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     creator_title: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
-    # Friends (1.3.0)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
-    # Support
     support_reputation: Mapped[int] = mapped_column(Integer, default=0)
     tickets_resolved: Mapped[int] = mapped_column(Integer, default=0)
     last_ticket_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -84,6 +81,15 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class Collection(Base):
+    __tablename__ = "collections"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    emoji: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
 class Card(Base):
@@ -109,6 +115,13 @@ class Card(Base):
     is_plus_only: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_creator_card: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     creator_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
+
+    collection_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("collections.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    in_drop: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     created_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
@@ -438,10 +451,6 @@ class TicketMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
 
-# ═════════════════════════════════════════════
-# FRIENDS (1.3.0)
-# ═════════════════════════════════════════════
-
 class Friend(Base):
     __tablename__ = "friends"
 
@@ -465,12 +474,8 @@ class FriendRequest(Base):
 
     __table_args__ = (UniqueConstraint("from_user_id", "to_user_id", name="uq_freq_pair"),)
 
-# ═════════════════════════════════════════════
-# TRADE + AUCTION (1.3.1 + 1.3.2)
-# ═════════════════════════════════════════════
 
 class Trade(Base):
-    """Обмен картами между игроками."""
     __tablename__ = "trades"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -489,7 +494,6 @@ class Trade(Base):
 
 
 class Auction(Base):
-    """Лот на аукционе."""
     __tablename__ = "auctions"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -511,7 +515,6 @@ class Auction(Base):
 
 
 class AuctionBid(Base):
-    """Ставка на аукционе."""
     __tablename__ = "auction_bids"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -519,3 +522,82 @@ class AuctionBid(Base):
     bidder_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class Event(Base):
+    __tablename__ = "events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(32), default="riddle")
+    riddle: Mapped[str | None] = mapped_column(Text, nullable=True)
+    riddle_image: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    answer: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    answer_hint: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    starts_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    phase: Mapped[str] = mapped_column(String(32), default="active", index=True)
+    max_winners: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    winners_count: Mapped[int] = mapped_column(Integer, default=0)
+    grant_creator: Mapped[bool] = mapped_column(Boolean, default=False)
+    grant_money: Mapped[int] = mapped_column(BigInteger, default=0)
+    grant_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    grant_card_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cards.id"), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class EventAttempt(Base):
+    __tablename__ = "event_attempts"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    event_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    answer: Mapped[str] = mapped_column(String(64), nullable=False)
+    is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
+    attempted_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class CreatorCard(Base):
+    __tablename__ = "creator_cards"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    author_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    card_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("cards.id", ondelete="CASCADE"), unique=True, nullable=False)
+
+    royalty_percent: Mapped[float] = mapped_column(Numeric(5, 2), default=5.0)
+    total_earned: Mapped[int] = mapped_column(BigInteger, default=0)
+    total_sales: Mapped[int] = mapped_column(Integer, default=0)
+
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    moderation_note: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    moderated_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
+    moderated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revision_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ModerationLog(Base):
+    __tablename__ = "moderation_logs"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    creator_card_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("creator_cards.id", ondelete="CASCADE"), nullable=False)
+    moderator_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class RoyaltyPayout(Base):
+    __tablename__ = "royalty_payouts"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    creator_card_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("creator_cards.id", ondelete="CASCADE"), nullable=False, index=True)
+    buyer_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    sale_price: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    royalty_amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    paid_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
