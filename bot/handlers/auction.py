@@ -23,6 +23,7 @@ from core.constants import (
 from core.logger import setup_logger
 from db.models import Auction, AuctionBid, Card, User, UserCard
 from db.session import AsyncSessionLocal
+from services.clan import get_clan_bonuses, get_user_clan
 
 router = Router()
 logger = setup_logger()
@@ -35,17 +36,58 @@ class AuctionState(StatesGroup):
 
 
 # ═════════════════════════════════════════════
+# ХЕЛПЕР — комиссия с учётом Indy+ и клана
+# ═════════════════════════════════════════════
+
+async def _get_effective_commission(session, seller: User) -> float:
+    """
+    Считает итоговую комиссию аукциона.
+
+    База: 10%.
+    Indy+: −5% (итого 5%).
+    Клан: −{auction_discount}% (0–5%).
+    Минимум: 0%.
+    """
+    base = AUCTION_COMMISSION
+
+    if seller.plus_tier == "indy_plus" and seller.plus_expires_at and seller.plus_expires_at > datetime.utcnow():
+        base = AUCTION_COMMISSION_PLUS
+
+    # Клановая скидка
+    clan, _ = await get_user_clan(session, seller.id)
+    if clan is not None:
+        bonuses = get_clan_bonuses(clan.level)
+        base = max(0.0, base - bonuses.auction_discount)
+
+    return base
+
+
+# ═════════════════════════════════════════════
 # ГЛАВНОЕ МЕНЮ
 # ═════════════════════════════════════════════
 
 @router.callback_query(MainMenu.filter(F.action == "auction"))
 async def cb_auction(query: CallbackQuery) -> None:
     await safe_answer(query)
+
+    async with AsyncSessionLocal() as session:
+        user = (await session.execute(
+            select(User).where(User.telegram_id == query.from_user.id)
+        )).scalar_one_or_none()
+
+        commission_line = f"<b>{AUCTION_COMMISSION:.0f}%</b>"
+        if user is not None:
+            comm = await _get_effective_commission(session, user)
+            if comm < AUCTION_COMMISSION:
+                commission_line = (
+                    f"<b>{comm:.1f}%</b> "
+                    f"<s>{AUCTION_COMMISSION:.0f}%</s> ✨"
+                )
+
     await safe_render(
         query,
         f"🎯 <b>Аукцион</b>\n\n"
-        f"Комиссия: <b>{AUCTION_COMMISSION:.0f}%</b> "
-        f"(<b>{AUCTION_COMMISSION_PLUS:.0f}%</b> для Indy+)\n"
+        f"Твоя комиссия: {commission_line}\n"
         f"Шаг ставки: <b>{int(AUCTION_MIN_BID_STEP * 100)}%</b>\n\n"
         f"Выбирай:",
         get_auction_main_menu(),
@@ -300,7 +342,7 @@ async def cb_buyout(query: CallbackQuery, callback_data: AuctionMenu) -> None:
                 prev.balance += lot.current_bid
 
         seller = await session.get(User, lot.seller_id)
-        commission = AUCTION_COMMISSION_PLUS if seller.plus_tier == "indy_plus" else AUCTION_COMMISSION
+        commission = await _get_effective_commission(session, seller)
         fee = int(lot.buyout_price * commission / 100)
         seller.balance += lot.buyout_price - fee
 
@@ -331,7 +373,7 @@ async def cb_buyout(query: CallbackQuery, callback_data: AuctionMenu) -> None:
             seller_tg,
             f"💰 <b>Лот выкуплен!</b>\n\n"
             f"@{me_username} выкупил за <b>{price:,}</b>\n"
-            f"Комиссия: <b>{fee:,}</b>",
+            f"Комиссия: <b>{fee:,}</b> ({commission:.1f}%)",
             parse_mode="HTML",
         )
     except Exception:
@@ -604,4 +646,4 @@ async def cb_cancel_lot(query: CallbackQuery, callback_data: AuctionMenu) -> Non
 
 @router.callback_query(F.data == "noop")
 async def cb_noop(query: CallbackQuery) -> None:
-    await safe_answer(query) 
+    await safe_answer(query)
