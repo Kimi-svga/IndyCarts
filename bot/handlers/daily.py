@@ -11,20 +11,29 @@ from bot.utils.stable import safe_answer, safe_render
 from core.config import settings
 from db.models import DailyReward, User
 from db.session import AsyncSessionLocal
+from services.clan import get_clan_bonuses, get_user_clan
 
 router = Router()
 
 
-def _attempts_for(user: User) -> int:
-    """Сколько попыток давать игроку (зависит от Indy+)."""
-    if user.plus_tier == "indy_plus":
-        return settings.PLUS_DAILY_ATTEMPTS
-    return settings.DAILY_ATTEMPTS
+async def _attempts_for(session, user: User) -> int:
+    """Сколько попыток давать игроку за дейли: база + Indy+ + клан."""
+    base = (
+        settings.PLUS_DAILY_ATTEMPTS
+        if user.plus_tier == "indy_plus"
+        else settings.DAILY_ATTEMPTS
+    )
+
+    clan, _ = await get_user_clan(session, user.id)
+    if clan is not None:
+        base += get_clan_bonuses(clan.level).extra_attempts
+
+    return base
 
 
 @router.callback_query(MainMenu.filter(F.action == "daily"))
 async def cb_daily(query: CallbackQuery) -> None:
-    """Выдаёт ежедневку (раз в день). Если уже получена — таймер."""
+    """Выдаёт ежедневку (раз в день). Не трогает купленные попытки."""
     await safe_answer(query)
     today = date.today()
 
@@ -37,13 +46,6 @@ async def cb_daily(query: CallbackQuery) -> None:
             await safe_render(query, "❌ Сначала /start", get_back_menu())
             return
 
-        attempts_grant = _attempts_for(user)
-
-        # Сброс попыток в полночь
-        if user.last_attempt_date != today:
-            user.daily_attempts = attempts_grant
-            user.last_attempt_date = today
-
         claimed = (await session.execute(
             select(DailyReward).where(
                 DailyReward.user_id == user.id,
@@ -51,14 +53,10 @@ async def cb_daily(query: CallbackQuery) -> None:
             )
         )).scalar_one_or_none()
 
-        # Уже получено — таймер
         if claimed is not None:
-            await session.commit()
-
             now = datetime.utcnow()
             tomorrow = datetime(now.year, now.month, now.day) + timedelta(days=1)
             diff = tomorrow - now
-
             hours = diff.seconds // 3600
             minutes = (diff.seconds % 3600) // 60
 
@@ -72,10 +70,11 @@ async def cb_daily(query: CallbackQuery) -> None:
             )
             return
 
-        # Выдаём
+        attempts_grant = await _attempts_for(session, user)
+
         user.balance += settings.DAILY_MONEY
         user.daily_streak += 1
-        user.daily_attempts = attempts_grant
+        user.daily_attempts += attempts_grant
         user.last_attempt_date = today
         user.last_daily_at = datetime.utcnow()
 
@@ -86,14 +85,17 @@ async def cb_daily(query: CallbackQuery) -> None:
             attempts=attempts_grant,
         ))
         await session.commit()
+
         streak = user.daily_streak
+        total_attempts = user.daily_attempts
 
     await safe_render(
         query,
         f"🎁 <b>Ежедневный бонус</b>\n\n"
         f"💰 +{settings.DAILY_MONEY}\n"
-        f"🎴 +{attempts_grant}\n"
-        f"🔥 Стрик: {streak}\n\n"
+        f"🎴 +{attempts_grant} попыток\n"
+        f"🔥 Стрик: <b>{streak}</b>\n\n"
+        f"🎴 Всего попыток: <b>{total_attempts}</b>\n"
         f"⏳ Следующая через <b>24ч</b>",
         get_back_menu(),
-        ) 
+    ) 
