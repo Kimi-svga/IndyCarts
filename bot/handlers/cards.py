@@ -1,6 +1,6 @@
 """Обработчики карт: коллекция, дроп, трейды, продажа, слияние."""
 
-from datetime import date, datetime, timedelta
+from datetime import datetime
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -18,6 +18,7 @@ from core.config import settings
 from core.constants import MARKET_FEE, RARITY_EMOJI, RARITY_NAMES
 from db.models import Card, User, UserCard
 from db.session import AsyncSessionLocal
+from services.clan import get_clan_bonuses, get_user_clan
 from services.drop import Drop
 from services.economy import format_change, get_price_change
 from services.merge import merge_cards
@@ -57,11 +58,10 @@ async def cb_my(query: CallbackQuery) -> None:
 
 
 # ═════════════════════════════════════════════
-# ФИЛЬТР + СПИСОК КАРТ (С ГРУППИРОВКОЙ)
+# ФИЛЬТР + СПИСОК КАРТ
 # ═════════════════════════════════════════════
 
 async def _get_grouped_cards(user_id: int, rarity: str = "all") -> list:
-    """Возвращает сгруппированные карты: (Card, count, first_uc_id)."""
     async with AsyncSessionLocal() as session:
         stmt = (
             select(
@@ -110,7 +110,6 @@ async def cb_filter(query: CallbackQuery, callback_data: CardsFilter) -> None:
 
 
 async def show_card(query: CallbackQuery, rows: list, index: int, rarity: str = "all") -> None:
-    """Показывает карту с группировкой и стрелками."""
     if index < 0:
         index = 0
     if index >= len(rows):
@@ -139,15 +138,8 @@ async def show_card(query: CallbackQuery, rows: list, index: int, rarity: str = 
 
     b = InlineKeyboardBuilder()
 
-    # ─── НАВИГАЦИЯ: ⏮ ⬅️ N/M ➡️ ⏭ ───
-    b.button(
-        text="⏮",
-        callback_data=f"crd_0_{rarity}" if index > 0 else "noop",
-    )
-    b.button(
-        text="⬅️",
-        callback_data=f"crd_{index - 1}_{rarity}" if index > 0 else "noop",
-    )
+    b.button(text="⏮", callback_data=f"crd_0_{rarity}" if index > 0 else "noop")
+    b.button(text="⬅️", callback_data=f"crd_{index - 1}_{rarity}" if index > 0 else "noop")
     b.button(text=f"{index + 1}/{len(rows)}", callback_data="noop")
     b.button(
         text="➡️",
@@ -158,7 +150,6 @@ async def show_card(query: CallbackQuery, rows: list, index: int, rarity: str = 
         callback_data=f"crd_{len(rows) - 1}_{rarity}" if index < len(rows) - 1 else "noop",
     )
 
-    # ─── ДЕЙСТВИЯ ───
     b.button(text="📊 Индекс", callback_data=f"idx_{card.id}")
     b.button(text="🎁 Передать", callback_data=f"trd_{first_uc_id}")
 
@@ -324,15 +315,12 @@ async def cb_trade_confirm(message: Message, state: FSMContext) -> None:
 
 
 # ═════════════════════════════════════════════
-# ПРОДАЖА — ОДНА КАРТА
+# ПРОДАЖА
 # ═════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("sll_"))
 async def cb_sell(query: CallbackQuery) -> None:
-    """Продать одну карту."""
-    # Отвечаем сразу — чтобы кнопка не «залипала»
     await safe_answer(query)
-
     user_card_id = int(query.data.replace("sll_", ""))
     result_text = None
 
@@ -342,10 +330,7 @@ async def cb_sell(query: CallbackQuery) -> None:
         )).scalar_one_or_none()
 
         if user is None:
-            await query.bot.send_message(
-                query.from_user.id,
-                "❌ Сначала /start",
-            )
+            await query.bot.send_message(query.from_user.id, "❌ Сначала /start")
             return
 
         user_card = (await session.execute(
@@ -356,10 +341,7 @@ async def cb_sell(query: CallbackQuery) -> None:
         )).scalar_one_or_none()
 
         if user_card is None:
-            await query.bot.send_message(
-                query.from_user.id,
-                "❌ Карта не найдена",
-            )
+            await query.bot.send_message(query.from_user.id, "❌ Карта не найдена")
             return
 
         card = (await session.execute(
@@ -367,10 +349,7 @@ async def cb_sell(query: CallbackQuery) -> None:
         )).scalar_one_or_none()
 
         if card is None:
-            await query.bot.send_message(
-                query.from_user.id,
-                "❌ Карта не найдена",
-            )
+            await query.bot.send_message(query.from_user.id, "❌ Карта не найдена")
             return
 
         price = int(card.current_price * (1 - MARKET_FEE))
@@ -388,37 +367,22 @@ async def cb_sell(query: CallbackQuery) -> None:
         )
         user_id = user.id
 
-    # Уведомление в личку
     try:
-        await query.bot.send_message(
-            query.from_user.id,
-            result_text,
-            parse_mode="HTML",
-        )
+        await query.bot.send_message(query.from_user.id, result_text, parse_mode="HTML")
     except Exception:
         pass
 
-    # Обновляем экран
     rows = await _get_grouped_cards(user_id, "all")
 
     if not rows:
-        await safe_render(
-            query,
-            "🃏 <b>Коллекция пуста</b>",
-            get_filter_menu(),
-        )
+        await safe_render(query, "🃏 <b>Коллекция пуста</b>", get_filter_menu())
         return
 
     await show_card(query, rows, 0, "all")
 
 
-# ═════════════════════════════════════════════
-# ПРОДАЖА — ВСЕ КАРТЫ
-# ═════════════════════════════════════════════
-
 @router.callback_query(F.data.startswith("sllall_"))
 async def cb_sell_all(query: CallbackQuery) -> None:
-    """Продать все карты одного типа."""
     await safe_answer(query)
 
     parts = query.data.replace("sllall_", "").split("_")
@@ -426,10 +390,7 @@ async def cb_sell_all(query: CallbackQuery) -> None:
         card_id = int(parts[0])
         rarity = parts[1] if len(parts) > 1 else "all"
     except (ValueError, IndexError):
-        await query.bot.send_message(
-            query.from_user.id,
-            "❌ Ошибка",
-        )
+        await query.bot.send_message(query.from_user.id, "❌ Ошибка")
         return
 
     result_text = None
@@ -440,10 +401,7 @@ async def cb_sell_all(query: CallbackQuery) -> None:
         )).scalar_one_or_none()
 
         if user is None:
-            await query.bot.send_message(
-                query.from_user.id,
-                "❌ Сначала /start",
-            )
+            await query.bot.send_message(query.from_user.id, "❌ Сначала /start")
             return
 
         card = (await session.execute(
@@ -451,13 +409,9 @@ async def cb_sell_all(query: CallbackQuery) -> None:
         )).scalar_one_or_none()
 
         if card is None:
-            await query.bot.send_message(
-                query.from_user.id,
-                "❌ Карта не найдена",
-            )
+            await query.bot.send_message(query.from_user.id, "❌ Карта не найдена")
             return
 
-        # Все UserCard этого типа
         user_cards = (await session.execute(
             select(UserCard).where(
                 UserCard.user_id == user.id,
@@ -466,10 +420,7 @@ async def cb_sell_all(query: CallbackQuery) -> None:
         )).scalars().all()
 
         if not user_cards:
-            await query.bot.send_message(
-                query.from_user.id,
-                "❌ Нет таких карт",
-            )
+            await query.bot.send_message(query.from_user.id, "❌ Нет таких карт")
             return
 
         count = len(user_cards)
@@ -492,17 +443,11 @@ async def cb_sell_all(query: CallbackQuery) -> None:
         )
         user_id = user.id
 
-    # Уведомление в личку
     try:
-        await query.bot.send_message(
-            query.from_user.id,
-            result_text,
-            parse_mode="HTML",
-        )
+        await query.bot.send_message(query.from_user.id, result_text, parse_mode="HTML")
     except Exception:
         pass
 
-    # Обновляем экран
     rows = await _get_grouped_cards(user_id, rarity)
 
     if not rows:
@@ -522,8 +467,8 @@ async def cb_sell_all(query: CallbackQuery) -> None:
 
 @router.callback_query(CardsMenu.filter(F.action == "drop"))
 async def cb_drop(query: CallbackQuery) -> None:
+    """Дроп карты. Попытки НЕ сбрасывает — только тратит."""
     await safe_answer(query)
-    today = date.today()
 
     async with AsyncSessionLocal() as session:
         user = (await session.execute(
@@ -534,10 +479,7 @@ async def cb_drop(query: CallbackQuery) -> None:
             await safe_render(query, "❌ Сначала /start")
             return
 
-        if user.last_attempt_date != today:
-            user.daily_attempts = settings.DAILY_ATTEMPTS
-            user.last_attempt_date = today
-            await session.commit()
+        # ❌ СБРОС ПОПЫТОК УБРАН. Только /daily обновляет попытки.
 
         if user.daily_attempts <= 0:
             now = datetime.utcnow()
@@ -555,7 +497,13 @@ async def cb_drop(query: CallbackQuery) -> None:
             )
             return
 
-        card, is_iw = await Drop.drop_card(session)
+        # Клановые бонусы (только для шанса дропа и монет)
+        clan, _ = await get_user_clan(session, user.id)
+        bonuses = get_clan_bonuses(clan.level) if clan else None
+
+        drop_bonus = bonuses.drop_bonus if bonuses else 0.0
+        card, is_iw = await Drop.drop_card_with_bonus(session, drop_bonus)
+
         if card is None:
             await safe_render(query, "❌ Нет карт в базе", get_cards_menu())
             return
@@ -573,6 +521,15 @@ async def cb_drop(query: CallbackQuery) -> None:
             serial_number=serial,
         ))
         user.daily_attempts -= 1
+
+        # Денежный бонус клана
+        money_bonus = bonuses.money_bonus if bonuses else 0.0
+        bonus_money = 0
+        if money_bonus > 0:
+            base_reward = 10
+            bonus_money = int(base_reward * (1 + money_bonus))
+            user.balance += bonus_money
+
         await session.commit()
 
         remaining = user.daily_attempts
@@ -591,11 +548,20 @@ async def cb_drop(query: CallbackQuery) -> None:
         if serial is not None:
             limit_text += f"\n🔢 Твой номер: <b>#{serial}</b>"
 
+    bonus_line = ""
+    if bonuses and (bonuses.drop_bonus > 0 or bonus_money > 0):
+        bonus_line = (
+            f"\n\n🏰 <b>Бонус клана:</b>\n"
+            f"🍀 Дроп: +{bonuses.drop_bonus * 100:.0f}%\n"
+            f"💰 Монеты: +{bonus_money}"
+        )
+
     text = (
         f"🎴 <b>Дроп!</b>\n\n"
         f"{emoji} <b>{card_name}</b>{iw_text}\n"
         f"Редкость: {RARITY_NAMES[card_rarity]}\n"
-        f"Цена: {card_price:,}{limit_text}\n\n"
+        f"Цена: {card_price:,}{limit_text}"
+        f"{bonus_line}\n\n"
         f"Осталось: <b>{remaining}</b>"
     )
 
