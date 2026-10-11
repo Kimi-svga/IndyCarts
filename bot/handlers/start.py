@@ -1,4 +1,4 @@
-"""Старт, регистрация, подписка, реферальная система."""
+"""Старт, регистрация, подписка, реферальная система — Simply Flag."""
 
 from aiogram import Bot, F, Router
 from aiogram.filters import CommandStart, CommandObject
@@ -232,7 +232,6 @@ async def handle_username(message: Message, state: FSMContext) -> None:
 
     await state.clear()
 
-    # Приветствие
     await message.answer(
         f"✅ <b>@{username}</b>, ты в игре!\n\n"
         f"💰 {settings.DAILY_MONEY} Simply Coins\n"
@@ -240,7 +239,6 @@ async def handle_username(message: Message, state: FSMContext) -> None:
         parse_mode="HTML",
     )
 
-    # Главное меню
     from bot.handlers.menu import show_main_menu
     await show_main_menu(message)
 
