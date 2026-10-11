@@ -1,62 +1,60 @@
-"""Сборка текста инфо-панели главного меню."""
+"""Главное меню Simply Flag — совмещение BxB-стиля и кнопок Пьера."""
 
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.constants import CLAN_ROLE_EMOJI, MAIN_MENU_TITLE
-from db.models import Card, Clan, ClanMember, Friend, User, UserCard
+from db.models import Card, User, UserCard
 
 
 async def build_main_menu_text(
     user: User,
     session: AsyncSession,
 ) -> str:
-    """Собирает инфо-панель главного меню."""
+    """Инфо-панель в BxB-стиле (блоки с ветками)."""
+
     cards_count = (await session.execute(
         select(func.count(UserCard.id)).where(UserCard.user_id == user.id)
     )).scalar() or 0
 
-    collection_value = (await session.execute(
-        select(func.sum(Card.current_price))
-        .join(UserCard, UserCard.card_id == Card.id)
-        .where(UserCard.user_id == user.id)
-    )).scalar() or 0
+    is_plus_active = (
+        user.plus_tier == "indy_plus"
+        and user.plus_expires_at is not None
+        and user.plus_expires_at > datetime.utcnow()
+    )
+    plus_status = "✅ активен" if is_plus_active else "❌ не активен"
 
-    collection_value = int(collection_value) if collection_value else 0
+    common_attempts = user.shop_attempts_today or 0
+    free_attempts = user.daily_attempts - common_attempts
+    if free_attempts < 0:
+        free_attempts = user.daily_attempts
+        common_attempts = 0
 
-    friends_count = (await session.execute(
-        select(func.count(Friend.id)).where(Friend.user_id == user.id)
-    )).scalar() or 0
+    daily_status = "доступна сейчас"
+    if user.last_daily_at is not None and user.last_daily_at.date() == date.today():
+        daily_status = "получена сегодня"
 
-    # Клан
-    clan_line = ""
-    row = (await session.execute(
-        select(ClanMember, Clan)
-        .join(Clan, ClanMember.clan_id == Clan.id)
-        .where(ClanMember.user_id == user.id, Clan.is_active == True)
-    )).first()
-
-    if row is not None:
-        member, clan = row
-        emoji = CLAN_ROLE_EMOJI.get(member.role, "👤")
-        clan_line = f"\n🏰 [{clan.tag}] {clan.name} · {emoji} ур.{clan.level}"
-
-    daily_status = "доступна"
-    if user.last_daily_at is not None:
-        if user.last_daily_at.date() == date.today():
-            daily_status = "получена"
+    season_rating = 0
 
     text = (
-        f"{MAIN_MENU_TITLE}\n\n"
-        f"👤 <b>@{user.username}</b>{clan_line}\n"
-        f"💰 <b>{user.balance:,}</b>\n"
-        f"🃏 <b>{cards_count}</b> карт · 💎 <b>{collection_value:,}</b>\n"
-        f"⚔️ PvP: <b>{user.pvp_rating}</b> · 🔥 Стрик: <b>{user.daily_streak}</b>\n"
-        f"👥 Друзей: <b>{friends_count}</b>\n"
-        f"🎴 Попытки: <b>{user.daily_attempts}</b>\n"
-        f"📅 Ежедневка: <b>{daily_status}</b>"
+        f"📄 <b>МЕНЮ:</b>\n\n"
+        f"Здесь собрана основная информация\n"
+        f"по вашему профилю.\n\n"
+        f"👤 <b>@{user.username}</b> · <code>{user.telegram_id}</code>\n\n"
+        f"💰 <b>РЕСУРСЫ</b>\n"
+        f"├ Баланс: <b>{user.balance}</b> Simply Coins\n"
+        f"├ Карт в коллекции: <b>{cards_count}</b>\n"
+        f"└ Попыток: <b>{user.daily_attempts}</b>\n"
+        f"  ⬜ Обычные: {common_attempts}\n"
+        f"  ⬜ Бесплатные: {free_attempts}\n\n"
+        f"🎫 <b>ПОДПИСКА</b>\n"
+        f"└ Simply Goat Pass: {plus_status}\n\n"
+        f"📊 <b>РЕЙТИНГ</b>\n"
+        f"├ Общий: <b>{user.pvp_rating}</b>\n"
+        f"└ Сезонный: <b>{season_rating}</b>\n\n"
+        f"⏳ Следующая выдача: <b>{daily_status}</b>\n\n"
+        f"Выберите нужный раздел ниже."
     )
 
     return text
