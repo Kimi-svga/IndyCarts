@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     WEBHOOK_SECRET: str
     ADMIN_IDS: list[int] = []
     OWNER_IDS: list[int] = []
+    TECH_IDS: list[int] = []
     DATABASE_URL: str
     PORT: int = 8000
 
@@ -75,11 +76,15 @@ class Settings(BaseSettings):
     CARD_TEAMS_PER_PAGE: int = 8
     CARD_YEARS_PER_PAGE: int = 8
 
-    # ─── Clans (v1.5.0) ───
+    # Clans
     CLAN_CREATE_PRICE: int = 200_000
     CLAN_CREATE_FREE_FOR_PLUS: bool = True
     CLAN_INVITE_TIMEOUT_HOURS: int = 48
     CLAN_TOP_LIMIT: int = 10
 
+    # Predictions
+    PREDICTION_STAKE: int = 100
+    PREDICTION_MULTIPLIER: int = 3
 
-settings = Settings() 
+
+settings = Settings()
