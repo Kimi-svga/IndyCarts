@@ -22,6 +22,7 @@ from services.clan import get_clan_bonuses, get_user_clan
 from services.drop import Drop
 from services.economy import format_change, get_price_change
 from services.merge import merge_cards
+from services.stats import format_ownership, get_ownership, get_rarest_cards
 
 router = Router()
 
@@ -120,7 +121,10 @@ async def show_card(query: CallbackQuery, rows: list, index: int, rarity: str = 
 
     async with AsyncSessionLocal() as session:
         change = await get_price_change(session, card.id, hours=24)
+        ownership = await get_ownership(session, card.id)
+
     change_text = format_change(change)
+    ownership_text = format_ownership(ownership)
 
     limit_text = ""
     if card.max_supply is not None:
@@ -132,7 +136,8 @@ async def show_card(query: CallbackQuery, rows: list, index: int, rarity: str = 
         f"🃏 <b>{card.name}</b>{count_text}\n"
         f"Редкость: {RARITY_NAMES[card.rarity]} {emoji}\n"
         f"Команда: {card.team or '—'}\n"
-        f"Цена: <b>{card.current_price:,}</b> {change_text}{limit_text}\n\n"
+        f"Цена: <b>{card.current_price:,}</b> {change_text}{limit_text}\n"
+        f"{ownership_text}\n\n"
         f"Карта <b>{index + 1}</b> из <b>{len(rows)}</b>"
     )
 
@@ -196,6 +201,44 @@ async def cb_card_nav(query: CallbackQuery) -> None:
 
 
 # ═════════════════════════════════════════════
+# ТОП РЕДКИХ
+# ═════════════════════════════════════════════
+
+@router.callback_query(CardsMenu.filter(F.action == "rarest"))
+async def cb_rarest(query: CallbackQuery) -> None:
+    await safe_answer(query)
+
+    async with AsyncSessionLocal() as session:
+        rarest = await get_rarest_cards(session, limit=10)
+
+    if not rarest:
+        await safe_render(
+            query,
+            "🏆 <b>Пока нет данных</b>",
+            get_cards_menu(),
+        )
+        return
+
+    medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+
+    text = "🏆 <b>Топ-10 редких карт</b>\n\n"
+    for i, item in enumerate(rarest):
+        card = item["card"]
+        medal = medals[i] if i < len(medals) else f"{i + 1}."
+        emoji = RARITY_EMOJI.get(card.rarity, "⚪")
+        text += (
+            f"{medal} {emoji} <b>{card.name}</b>\n"
+            f"    👥 {item['owners']} владельцев · {item['percent']}%\n"
+        )
+
+    b = InlineKeyboardBuilder()
+    b.button(text="🔙 Назад", callback_data=CardsMenu(action="back_to_cards"))
+    b.adjust(1)
+
+    await safe_render(query, text, b.as_markup())
+
+
+# ═════════════════════════════════════════════
 # ИНДЕКС ЦЕН
 # ═════════════════════════════════════════════
 
@@ -217,7 +260,14 @@ async def cb_index(query: CallbackQuery) -> None:
         for label, hours in [("1 час", 1), ("6 часов", 6), ("24 часа", 24), ("7 дней", 168)]:
             changes[label] = await get_price_change(session, card.id, hours)
 
-    text = f"📊 <b>{card.name}</b> — динамика\n\n"
+        ownership = await get_ownership(session, card.id)
+
+    ownership_text = format_ownership(ownership)
+
+    text = (
+        f"📊 <b>{card.name}</b> — динамика\n\n"
+        f"{ownership_text}\n\n"
+    )
     for label, change in changes.items():
         text += f"<b>{label}:</b> {format_change(change)}\n"
 
@@ -479,8 +529,6 @@ async def cb_drop(query: CallbackQuery) -> None:
             await safe_render(query, "❌ Сначала /start")
             return
 
-        # ❌ СБРОС ПОПЫТОК УБРАН. Только /daily обновляет попытки.
-
         if user.daily_attempts <= 0:
             now = datetime.utcnow()
             tomorrow = datetime(now.year, now.month, now.day) + timedelta(days=1)
@@ -497,7 +545,6 @@ async def cb_drop(query: CallbackQuery) -> None:
             )
             return
 
-        # Клановые бонусы (только для шанса дропа и монет)
         clan, _ = await get_user_clan(session, user.id)
         bonuses = get_clan_bonuses(clan.level) if clan else None
 
@@ -522,7 +569,6 @@ async def cb_drop(query: CallbackQuery) -> None:
         ))
         user.daily_attempts -= 1
 
-        # Денежный бонус клана
         money_bonus = bonuses.money_bonus if bonuses else 0.0
         bonus_money = 0
         if money_bonus > 0:
@@ -531,6 +577,9 @@ async def cb_drop(query: CallbackQuery) -> None:
             user.balance += bonus_money
 
         await session.commit()
+
+        # Ownership после дропа
+        ownership = await get_ownership(session, card.id)
 
         remaining = user.daily_attempts
         card_issued = card.issued
@@ -548,6 +597,8 @@ async def cb_drop(query: CallbackQuery) -> None:
         if serial is not None:
             limit_text += f"\n🔢 Твой номер: <b>#{serial}</b>"
 
+    ownership_text = format_ownership(ownership)
+
     bonus_line = ""
     if bonuses and (bonuses.drop_bonus > 0 or bonus_money > 0):
         bonus_line = (
@@ -560,7 +611,8 @@ async def cb_drop(query: CallbackQuery) -> None:
         f"🎴 <b>Дроп!</b>\n\n"
         f"{emoji} <b>{card_name}</b>{iw_text}\n"
         f"Редкость: {RARITY_NAMES[card_rarity]}\n"
-        f"Цена: {card_price:,}{limit_text}"
+        f"Цена: {card_price:,}{limit_text}\n"
+        f"{ownership_text}"
         f"{bonus_line}\n\n"
         f"Осталось: <b>{remaining}</b>"
     )
