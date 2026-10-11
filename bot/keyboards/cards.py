@@ -18,10 +18,11 @@ class CardsFilter(CallbackData, prefix="cflt"):
 
 
 def get_cards_menu() -> InlineKeyboardMarkup:
-    """Меню карт: коллекция, дроп, слияние."""
+    """Меню карт: коллекция, дроп, слияние, топ редких."""
     b = InlineKeyboardBuilder()
     b.button(text="🃏 Моя коллекция", callback_data=CardsMenu(action="my"))
     b.button(text="🎴 Дроп", callback_data=CardsMenu(action="drop"))
+    b.button(text="🏆 Топ редких", callback_data=CardsMenu(action="rarest"))
     b.button(text="🔀 Слияние", callback_data=CardsMenu(action="merge"))
     b.button(text="🔙 Назад", callback_data=MainMenu(action="back"))
     b.adjust(1)
@@ -54,4 +55,4 @@ def get_merge_menu() -> InlineKeyboardMarkup:
     b.button(text="🟡 Legendary ×3 → Limited (20%)", callback_data="mg_legendary")
     b.button(text="🔙 Назад", callback_data=CardsMenu(action="back_to_cards"))
     b.adjust(1)
-    return b.as_markup()
+    return b.as_markup() 
