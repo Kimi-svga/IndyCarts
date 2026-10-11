@@ -1,4 +1,4 @@
-"""Модели SQLAlchemy для Indy Carts."""
+"""Модели SQLAlchemy для Simply Flag."""
 
 from datetime import date, datetime
 
@@ -106,6 +106,10 @@ class Card(Base):
     current_price: Mapped[int] = mapped_column(BigInteger, nullable=False)
     floor_price: Mapped[int] = mapped_column(BigInteger, nullable=False)
     ceiling_price: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+    # НОВОЕ для Simply Flag
+    rating: Mapped[int] = mapped_column(Integer, default=100, index=True)
+    is_purchasable: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
 
     image_file_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
     drop_weight: Mapped[int] = mapped_column(Integer, default=100)
@@ -626,6 +630,7 @@ class Clan(Base):
 
     is_open: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    is_staff: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
