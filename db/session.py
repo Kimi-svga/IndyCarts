@@ -13,6 +13,13 @@ engine = create_async_engine(
     echo=False,
     pool_size=5,
     max_overflow=10,
+    pool_pre_ping=True,
+    pool_recycle=300,
+    connect_args={
+        "ssl": "require",
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    },
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -31,4 +38,4 @@ async def init_db() -> None:
 
 async def close_db() -> None:
     """Закрывает движок при остановке."""
-    await engine.dispose() 
+    await engine.dispose()
