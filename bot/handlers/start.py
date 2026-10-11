@@ -23,7 +23,8 @@ from db.session import AsyncSessionLocal
 
 router = Router()
 logger = setup_logger()
-CHANNEL_ID = "@IndyCarts"
+CHANNEL_ID = "@simply_Flag_Channel"
+CHANNEL_URL = "https://t.me/simply_Flag_Channel"
 
 
 class RegState(StatesGroup):
@@ -43,7 +44,7 @@ async def is_subscribed(bot: Bot, user_id: int) -> bool:
 def subscribe_keyboard() -> InlineKeyboardMarkup:
     """Клавиатура подписки."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Подписаться", url="https://t.me/IndyCarts")],
+        [InlineKeyboardButton(text="📢 Подписаться", url=CHANNEL_URL)],
         [InlineKeyboardButton(text="✅ Я подписался", callback_data="check_sub")],
     ])
 
@@ -85,8 +86,9 @@ async def _start_logic(
     """Общая логика /start."""
     if not await is_subscribed(message.bot, message.from_user.id):
         await message.answer(
-            "🏁 <b>Добро пожаловать в Indy Carts!</b>\n\n"
-            "Чтобы начать, подпишись на канал:\n📢 @IndyCarts\n\n"
+            "🏁 <b>Добро пожаловать в Simply Flag!</b>\n\n"
+            "Чтобы начать, подпишись на канал:\n"
+            f"📢 @simply_Flag_Channel\n\n"
             "Потом нажми «✅ Я подписался»",
             reply_markup=subscribe_keyboard(),
             parse_mode="HTML",
@@ -212,7 +214,7 @@ async def handle_username(message: Message, state: FSMContext) -> None:
                     await session.commit()
                     ref_text = (
                         f"\n\n👥 <b>По приглашению</b>\n"
-                        f"💰 +{settings.REFERRAL_BONUS_MONEY} монет\n"
+                        f"💰 +{settings.REFERRAL_BONUS_MONEY} Simply Coins\n"
                         f"🎴 +{settings.REFERRAL_BONUS_ATTEMPTS} попытка"
                     )
 
@@ -221,7 +223,7 @@ async def handle_username(message: Message, state: FSMContext) -> None:
                             referrer.telegram_id,
                             f"👥 <b>Новый реферал!</b>\n\n"
                             f"@{username} присоединился по твоей ссылке.\n"
-                            f"💰 +{settings.REFERRAL_BONUS_MONEY} монет\n"
+                            f"💰 +{settings.REFERRAL_BONUS_MONEY} Simply Coins\n"
                             f"🎴 +{settings.REFERRAL_BONUS_ATTEMPTS} попытка",
                             parse_mode="HTML",
                         )
@@ -233,7 +235,7 @@ async def handle_username(message: Message, state: FSMContext) -> None:
     # Приветствие
     await message.answer(
         f"✅ <b>@{username}</b>, ты в игре!\n\n"
-        f"💰 {settings.DAILY_MONEY} монет\n"
+        f"💰 {settings.DAILY_MONEY} Simply Coins\n"
         f"🎴 {settings.DAILY_ATTEMPTS} попытки{ref_text}",
         parse_mode="HTML",
     )
@@ -246,4 +248,4 @@ async def handle_username(message: Message, state: FSMContext) -> None:
 @router.message(RegState.waiting_username)
 async def handle_bad_username(message: Message) -> None:
     """Неверный формат ника."""
-    await message.answer("❌ Ник должен быть 3–20 символов, латиница, начинаться с буквы.") 
+    await message.answer("❌ Ник должен быть 3–20 символов, латиница, начинаться с буквы.")
