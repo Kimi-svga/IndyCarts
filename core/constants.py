@@ -1,7 +1,7 @@
-"""Константы игры Simply Flag."""
+"""Константы игры — Simply Flag (F1)."""
 
 # ─────────────────────────────────────────────
-# РЕДКОСТИ (11 уровней)
+# РЕДКОСТИ — 11 штук (Пьера)
 # ─────────────────────────────────────────────
 
 RARITY_BASE = "base"
@@ -17,9 +17,16 @@ RARITY_WORLD_CHAMPION = "world_champion"
 RARITY_COLLABORATION = "collaboration"
 
 RARITIES = [
-    RARITY_BASE, RARITY_GOOD, RARITY_EPIC, RARITY_LEGEND,
-    RARITY_RACING_CAR, RARITY_RACING_TRACK, RARITY_LIMITED,
-    RARITY_WINNER, RARITY_SIMPLY_LOVELY, RARITY_WORLD_CHAMPION,
+    RARITY_BASE,
+    RARITY_GOOD,
+    RARITY_EPIC,
+    RARITY_LEGEND,
+    RARITY_RACING_CAR,
+    RARITY_RACING_TRACK,
+    RARITY_LIMITED,
+    RARITY_WINNER,
+    RARITY_SIMPLY_LOVELY,
+    RARITY_WORLD_CHAMPION,
     RARITY_COLLABORATION,
 ]
 
@@ -51,7 +58,7 @@ RARITY_EMOJI = {
     RARITY_COLLABORATION: "🤝",
 }
 
-# Рейтинг для коллекции
+# Рейтинг для коллекции (для Simply Flag)
 RARITY_RATINGS = {
     RARITY_BASE: 100,
     RARITY_GOOD: 250,
@@ -66,7 +73,7 @@ RARITY_RATINGS = {
     RARITY_COLLABORATION: 3200,
 }
 
-# Базовая цена
+# Базовая цена для экономики (аукцион, биржа)
 BASE_PRICES = {
     RARITY_BASE: 100,
     RARITY_GOOD: 300,
@@ -81,33 +88,35 @@ BASE_PRICES = {
     RARITY_COLLABORATION: 50000,
 }
 
-# Шансы дропа
 DROP_CHANCES = {
     RARITY_BASE: 40,
     RARITY_GOOD: 25,
     RARITY_EPIC: 15,
     RARITY_LEGEND: 10,
     RARITY_RACING_CAR: 4,
-    RARITY_RACING_TRACK: 4,
-    RARITY_LIMITED: 1,
-    RARITY_WINNER: 0.5,
-    RARITY_SIMPLY_LOVELY: 0.3,
-    RARITY_WORLD_CHAMPION: 0.15,
-    RARITY_COLLABORATION: 0.05,
+    RARITY_RACING_TRACK: 3,
+    RARITY_LIMITED: 1.5,
+    RARITY_WINNER: 1.0,
+    RARITY_SIMPLY_LOVELY: 0.4,
+    RARITY_WORLD_CHAMPION: 0.08,
+    RARITY_COLLABORATION: 0.02,
 }
 
-# Слияние карт
 MERGE_RULES = {
     RARITY_BASE: {"result": RARITY_GOOD, "chance": 0.7},
     RARITY_GOOD: {"result": RARITY_EPIC, "chance": 0.7},
     RARITY_EPIC: {"result": RARITY_LEGEND, "chance": 0.7},
-    RARITY_LEGEND: {"result": RARITY_RACING_CAR, "chance": 0.5},
-    RARITY_RACING_CAR: {"result": RARITY_LIMITED, "chance": 0.4},
-    RARITY_RACING_TRACK: {"result": RARITY_LIMITED, "chance": 0.4},
+    RARITY_LEGEND: {"result": RARITY_RACING_CAR, "chance": 0.7},
+    RARITY_RACING_CAR: {"result": RARITY_LIMITED, "chance": 0.5},
+    RARITY_RACING_TRACK: {"result": RARITY_LIMITED, "chance": 0.5},
     RARITY_LIMITED: {"result": RARITY_WINNER, "chance": 0.3},
     RARITY_WINNER: {"result": RARITY_SIMPLY_LOVELY, "chance": 0.2},
-    RARITY_SIMPLY_LOVELY: {"result": RARITY_WORLD_CHAMPION, "chance": 0.15},
+    RARITY_SIMPLY_LOVELY: {"result": RARITY_WORLD_CHAMPION, "chance": 0.1},
 }
+
+# ─────────────────────────────────────────────
+# ОБЩИЕ (оставляем как было)
+# ─────────────────────────────────────────────
 
 IW_CHANCE = 5
 IW_MULTIPLIER = 3
@@ -118,8 +127,7 @@ PVP_FEE = 10
 
 RESERVED_USERNAMES = {
     "owner", "admin", "support", "mod", "staff", "system", "bot",
-    "p49", "simplyflag", "simply", "flag", "f1", "bank", "market",
-    "auction", "help", "official",
+    "p49", "simplyflag", "merge", "bank", "market", "auction", "help", "official",
 }
 
 USERNAME_PATTERN = r"^[A-Za-z][A-Za-z0-9_]{2,19}$"
@@ -132,70 +140,65 @@ USERNAME_PATTERN = r"^[A-Za-z][A-Za-z0-9_]{2,19}$"
 MAIN_MENU_TITLE = "🏁 <b>Simply Flag</b>"
 
 MAIN_MENU_BUTTONS = [
-    ("🎴 Пит-стоп",              "drop"),
-    ("🃏 Мой гараж",             "cards"),
-    ("💰 F1 Store",               "shop"),
-    ("🎁 Контракты",              "tasks"),
-    ("🏆 Чемпионат",              "rating"),
-    ("🔥 Limited Grid",           "limited"),
-    ("⚔️ Grid Battles",           "pvp"),
-    ("🎲 Race Dice",              "cubes"),
-    ("🚗 DRS Zone",               "races"),
-    ("🏁 Гран-при",               "seasons"),
-    ("🏰 Конструкторы",           "clans"),
-    ("🤝 Трансферное окно",       "trade"),
-    ("🎯 Аукцион паддока",        "auction"),
-    ("👥 Напарники",              "friends"),
-    ("🏦 Командный бюджет",       "bank"),
-    ("🎫 Paddock Pass",           "plus"),
-    ("🎯 Race Predictions",       "predictions"),
-    ("🔧 Пит-бокс",               "merge"),
-    ("🔗 Пригласить в команду",   "ref"),
-    ("📖 Race Control",           "support"),
-    ("ℹ️ Simply Flag HQ",         "about"),
+    ("🎴 Пит-стоп",   "drop"),
+    ("🃏 Мой гараж",  "cards"),
+    ("🏎 Гонки",      "races_menu"),
+    ("💰 Экономика",  "economy_menu"),
+    ("📋 Задания",    "tasks_menu"),
+    ("🏢 Команда",    "team_menu"),
+    ("🏆 Рейтинг",    "rating"),
+    ("ℹ️ Информация", "info_menu"),
 ]
 
 
 # ─────────────────────────────────────────────
-# Банк
+# Банк (оставляем)
 # ─────────────────────────────────────────────
 
 LOAN_RATES = [
-    (50_000, 0.15), (200_000, 0.20),
-    (500_000, 0.25), (float("inf"), 0.30),
+    (50_000,       0.15),
+    (200_000,      0.20),
+    (500_000,      0.25),
+    (float("inf"), 0.30),
 ]
 
 LOAN_TERMS = [
-    (50_000, 7), (200_000, 14),
-    (500_000, 30), (float("inf"), 45),
+    (50_000,       7),
+    (200_000,      14),
+    (500_000,      30),
+    (float("inf"), 45),
 ]
 
 TRUST_RANKS = [
-    (-999, "⛔ Чёрный список"),
-    (0, "🥉 Новичок"),
-    (20, "🥈 Надёжный"),
-    (50, "🥇 Отличный"),
-    (100, "💎 Премиум"),
-    (200, "👑 Элита паддока"),
+    (-999,         "⛔ Чёрный список"),
+    (0,            "🥉 Новичок"),
+    (20,           "🥈 Надёжный"),
+    (50,           "🥇 Отличный"),
+    (100,          "💎 Премиум"),
+    (200,          "👑 Элита"),
 ]
 
 TRUST_DELTA = {
-    "early_repay": +10, "on_time": +5, "big_repay": +15,
-    "overdue": -15, "refinance": -3, "default": -50,
+    "early_repay":   +10,
+    "on_time":       +5,
+    "big_repay":     +15,
+    "overdue":       -15,
+    "refinance":     -3,
+    "default":       -50,
 }
 
 
 # ─────────────────────────────────────────────
-# PvP
+# PvP (оставляем)
 # ─────────────────────────────────────────────
 
 PVP_TITLES = [
-    (2000, "👑 Легенда F1"),
+    (2000, "👑 Легенда"),
     (1800, "🏆 Чемпион"),
     (1600, "⭐ Элита"),
     (1400, "🔥 Про"),
     (1200, "🟢 Новичок"),
-    (0, "⚪ Стажёр"),
+    (0,    "⚪ Стажёр"),
 ]
 
 PVP_SEASON_REWARDS = {
@@ -213,31 +216,43 @@ PVP_SEASON_REWARDS = {
 
 
 # ─────────────────────────────────────────────
-# Роли
+# Роли (оставляем)
 # ─────────────────────────────────────────────
 
 ROLE_LEVELS = {
-    "owner": 100, "admin": 80, "moderator": 60,
-    "helper": 40, "support": 30,
+    "owner": 100,
+    "admin": 80,
+    "moderator": 60,
+    "helper": 40,
+    "support": 30,
 }
 
 ROLE_EMOJI = {
-    "owner": "👑", "admin": "🔴", "moderator": "🟡",
-    "helper": "🟢", "support": "🔵",
+    "owner": "👑",
+    "admin": "🔴",
+    "moderator": "🟡",
+    "helper": "🟢",
+    "support": "🔵",
 }
 
 ROLE_NAMES = {
-    "owner": "Владелец", "admin": "Администратор",
-    "moderator": "Модератор", "helper": "Помощник",
+    "owner": "Владелец",
+    "admin": "Администратор",
+    "moderator": "Модератор",
+    "helper": "Помощник",
     "support": "Поддержка",
 }
 
 
 # ─────────────────────────────────────────────
-# Ban Hammer
+# Ban Hammer (оставляем)
 # ─────────────────────────────────────────────
 
-BAN_LEVELS = {"warn": "⚠️", "mute": "🔇", "ban": "🚫"}
+BAN_LEVELS = {
+    "warn": "⚠️",
+    "mute": "🔇",
+    "ban": "🚫",
+}
 
 BAN_NAMES = {
     "warn": "Предупреждение",
@@ -248,50 +263,40 @@ BAN_NAMES = {
 MUTE_DURATIONS = [1, 24, 168]
 BAN_DURATIONS = [168, 720, None]
 
-BAN_BAD_WORDS = {
-    "fuck", "shit", "bitch", "asshole",
-    "бля", "хуй", "пизда", "ебать", "сука",
-    "дурак", "идиот",
-}
-
-BAN_WARN_THRESHOLD = 3
-BAN_SPAM_THRESHOLD = 10
-BAN_WINTRADING_PAIRS = 5
-
 
 # ─────────────────────────────────────────────
-# Support
+# Support (оставляем)
 # ─────────────────────────────────────────────
 
 TICKET_CATEGORIES = {
-    "bug":     "🐛 Баг / ошибка",
-    "balance": "💰 Проблема с балансом",
-    "cards":   "🃏 Проблема с картами",
-    "pvp":     "⚔️ Проблема с Grid Battles",
-    "bank":    "🏦 Проблема с бюджетом",
-    "plus":    "🎫 Проблема с Paddock Pass",
-    "report":  "🚨 Жалоба на игрока",
-    "apply":   "📋 Заявка в команду",
-    "other":   "❓ Другое",
+    "bug":       "🐛 Баг / ошибка",
+    "balance":   "💰 Проблема с балансом",
+    "cards":     "🃏 Проблема с картами",
+    "pvp":       "⚔️ Проблема с PvP",
+    "bank":      "🏦 Проблема с бюджетом",
+    "plus":      "🎫 Проблема с Paddock Pass",
+    "report":    "🚨 Жалоба на игрока",
+    "apply":     "📋 Заявка в команду",
+    "other":     "❓ Другое",
 }
 
 TICKET_PRIORITIES = {
-    "low": "🟢 Низкий", "normal": "🟡 Обычный",
-    "high": "🟠 Высокий", "urgent": "🔴 Срочный",
+    "low":    "🟢 Низкий",
+    "normal": "🟡 Обычный",
+    "high":   "🟠 Высокий",
+    "urgent": "🔴 Срочный",
 }
 
 TICKET_STATUSES = {
-    "open": "📬 Открыт", "pending": "⏳ В ожидании",
-    "resolved": "✅ Решён", "closed": "🔒 Закрыт",
+    "open":     "📬 Открыт",
+    "pending":  "⏳ В ожидании",
+    "resolved": "✅ Решён",
+    "closed":   "🔒 Закрыт",
 }
-
-TICKET_COOLDOWN_MINUTES = 15
-TICKET_MAX_OPEN = 2
-TICKET_AUTO_CLOSE_HOURS = 72
 
 
 # ─────────────────────────────────────────────
-# Trade
+# Trade (оставляем)
 # ─────────────────────────────────────────────
 
 TRADE_MAX_CARDS = 5
@@ -299,19 +304,23 @@ TRADE_MAX_MONEY = 1_000_000
 TRADE_TIMEOUT_HOURS = 24
 
 TRADE_STATUSES = {
-    "pending": "⏳ ожидает", "accepted": "✅ принят",
-    "declined": "❌ отклонён", "cancelled": "🚫 отменён",
+    "pending": "⏳ ожидает",
+    "accepted": "✅ принят",
+    "declined": "❌ отклонён",
+    "cancelled": "🚫 отменён",
     "expired": "⌛ истёк",
 }
 
 
 # ─────────────────────────────────────────────
-# Auction
+# Auction (оставляем)
 # ─────────────────────────────────────────────
 
 AUCTION_DURATIONS = {
-    "1h": ("1 час", 1), "6h": ("6 часов", 6),
-    "24h": ("24 часа", 24), "3d": ("3 дня", 72),
+    "1h": ("1 час", 1),
+    "6h": ("6 часов", 6),
+    "24h": ("24 часа", 24),
+    "3d": ("3 дня", 72),
 }
 
 AUCTION_MIN_BID_STEP = 0.05
@@ -319,13 +328,15 @@ AUCTION_COMMISSION = 10.0
 AUCTION_COMMISSION_PLUS = 5.0
 
 AUCTION_STATUSES = {
-    "active": "🟢 активен", "sold": "✅ продан",
-    "cancelled": "🚫 отменён", "expired": "⌛ истёк",
+    "active": "🟢 активен",
+    "sold": "✅ продан",
+    "cancelled": "🚫 отменён",
+    "expired": "⌛ истёк",
 }
 
 
 # ─────────────────────────────────────────────
-# Clans (Конструкторы)
+# CLANS (оставляем)
 # ─────────────────────────────────────────────
 
 CLAN_MIN_LEVEL = 1
@@ -342,12 +353,22 @@ CLAN_TOP_LIMIT = 10
 
 CLAN_ROLES = ["leader", "officer", "member"]
 
-CLAN_ROLE_LEVELS = {"leader": 100, "officer": 60, "member": 10}
+CLAN_ROLE_LEVELS = {
+    "leader": 100,
+    "officer": 60,
+    "member": 10,
+}
 
-CLAN_ROLE_EMOJI = {"leader": "👑", "officer": "⚔️", "member": "👤"}
+CLAN_ROLE_EMOJI = {
+    "leader": "👑",
+    "officer": "⚔️",
+    "member": "👤",
+}
 
 CLAN_ROLE_NAMES = {
-    "leader": "Лидер", "officer": "Офицер", "member": "Участник",
+    "leader": "Лидер",
+    "officer": "Офицер",
+    "member": "Участник",
 }
 
 CLAN_LEVELS = {
@@ -364,16 +385,4 @@ CLAN_LEVELS = {
 }
 
 CLAN_INVITE_TIMEOUT_HOURS = 48
-CLAN_MAX_INVITES_PENDING = 20
-
-CLAN_ACTIONS = {
-    "create":   "🏰 Создание команды",
-    "join":     "📥 Вступление",
-    "leave":    "📤 Выход",
-    "deposit":  "💰 Вклад в казну",
-    "kick":     "🚪 Исключение",
-    "promote":  "⬆️ Повышение",
-    "demote":   "⬇️ Понижение",
-    "level_up": "🎉 Новый уровень",
-    "disband":  "💥 Расформирование",
-}
+CLAN_MAX_INVITES_PENDING = 20 
