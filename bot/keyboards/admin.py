@@ -1,4 +1,4 @@
-"""Клавиатура админ-панели."""
+"""Клавиатура админ-панели — Simply Flag."""
 
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardMarkup
@@ -13,7 +13,7 @@ class AdminMenu(CallbackData, prefix="admin"):
 
 
 def get_admin_menu() -> InlineKeyboardMarkup:
-    """Админ-меню."""
+    """Админ-меню Simply Flag."""
     b = InlineKeyboardBuilder()
     b.button(text="🃏 Добавить карту", callback_data=AdminMenu(action="add_card"))
     b.button(text="✏️ Редактор карт", callback_data=AdminMenu(action="edit_cards"))
@@ -21,6 +21,7 @@ def get_admin_menu() -> InlineKeyboardMarkup:
     b.button(text="🏆 Награды топ", callback_data=AdminMenu(action="rewards"))
     b.button(text="📨 Рассылка", callback_data=AdminMenu(action="broadcast"))
     b.button(text="📊 Статистика", callback_data=AdminMenu(action="stats"))
+    b.button(text="📖 Справка по рейтингам", callback_data=AdminMenu(action="ratings_help"))
     b.button(text="🔙 Назад", callback_data=MainMenu(action="back"))
     b.adjust(1)
-    return b.as_markup()
+    return b.as_markup() 
