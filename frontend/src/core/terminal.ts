@@ -43,32 +43,36 @@ export class Terminal {
     this.completer = new Completer(this.registry);
     this.executor = new Executor(this.registry);
 
-    // Создаём элементы
-    this.outputEl = document.createElement('div');
-    this.outputEl.className = 'term-output';
-
+    // ─── Input ───
     this.inputEl = document.createElement('input');
     this.inputEl.type = 'text';
     this.inputEl.className = 'term-input';
     this.inputEl.autocomplete = 'off';
-    this.inputEl.autocorrect = 'off';
     this.inputEl.autocapitalize = 'off';
     this.inputEl.spellcheck = false;
+    this.inputEl.setAttribute('autocorrect', 'off');
+    this.inputEl.setAttribute('inputmode', 'text');
     this.inputEl.placeholder = 'введи help...';
 
+    // ─── Output ───
+    this.outputEl = document.createElement('div');
+    this.outputEl.className = 'term-output';
+
+    // ─── Autocomplete ───
     this.autocompleteEl = document.createElement('div');
     this.autocompleteEl.className = 'term-autocomplete';
 
+    // ─── Render ───
     this.render();
     this.attachEvents();
 
-    // Keypad — панель кнопок внизу
+    // ─── Keypad ───
     this.keypad = new Keypad(
       this.container,
       this.handleKeypadAction.bind(this),
     );
 
-    // History modal
+    // ─── History Modal ───
     this.historyModal = new HistoryModal(
       this.container,
       (command) => {
@@ -77,6 +81,7 @@ export class Terminal {
       },
     );
 
+    // ─── Greeting + Focus ───
     this.printGreeting();
     this.inputEl.focus();
   }
@@ -110,13 +115,12 @@ export class Terminal {
     this.options.onCommand?.(trimmed);
 
     const pipeline = parse(trimmed);
-
     if (pipeline.length === 0) return;
 
     const ctx = this.options.context ?? {
       repo: createDummyRepo(),
       print: (html: string) => this.print(html),
-      user: { telegramId: 0, username: 'root', role: 'owner' },
+      user: { telegramId: 0, username: 'root', role: 'owner' as const },
     };
 
     const result = await this.executor.execute(pipeline, ctx);
@@ -129,7 +133,9 @@ export class Terminal {
     this.inputEl.focus();
   }
 
-  // ─── PRIVATE ───
+  // ═══════════════════════════════════════════
+  // PRIVATE
+  // ═══════════════════════════════════════════
 
   private render(): void {
     this.container.innerHTML = '';
@@ -151,7 +157,9 @@ export class Terminal {
   }
 
   private attachEvents(): void {
-    this.inputEl.addEventListener('keydown', (e) => this.handleKey(e));
+    this.inputEl.addEventListener('keydown', (e) => {
+      void this.handleKey(e);
+    });
 
     const kb = new Keybindings(this.inputEl, {
       onCtrlR: () => this.historyModal.open(this.history.all()),
@@ -162,6 +170,7 @@ export class Terminal {
     kb.attach();
 
     this.inputEl.addEventListener('input', () => this.updateAutocomplete());
+
     this.inputEl.addEventListener('blur', () => {
       setTimeout(() => this.hideAutocomplete(), 200);
     });
@@ -200,35 +209,96 @@ export class Terminal {
         this.inputEl.focus();
         break;
       }
+
       case 'history-next': {
         const next = this.history.next();
         if (next !== null) this.inputEl.value = next;
         this.inputEl.focus();
         break;
       }
+
       case 'tab':
         this.applyAutocomplete();
         this.inputEl.focus();
         break;
+
       case 'esc':
         this.hideAutocomplete();
         this.inputEl.value = '';
         this.inputEl.focus();
         break;
+
       case 'ctrl':
-        // Ctrl — модификатор, обрабатывается в keypad
+        this.handleCtrl(action.key);
+        this.inputEl.focus();
         break;
+
       case 'char':
         this.insertChar(action.value);
         this.inputEl.focus();
         break;
+
       case 'history':
         this.historyModal.open(this.history.all());
         break;
+
       case 'clear':
         this.clear();
         this.inputEl.focus();
         break;
+    }
+  }
+
+  private handleCtrl(key: string): void {
+    const input = this.inputEl;
+    const start = input.selectionStart ?? 0;
+    const end = input.selectionEnd ?? 0;
+    const value = input.value;
+
+    switch (key) {
+      case 'a': {
+        input.setSelectionRange(0, 0);
+        break;
+      }
+
+      case 'e': {
+        const len = value.length;
+        input.setSelectionRange(len, len);
+        break;
+      }
+
+      case 'u': {
+        input.value = value.slice(end);
+        input.setSelectionRange(0, 0);
+        break;
+      }
+
+      case 'k': {
+        input.value = value.slice(0, start);
+        input.setSelectionRange(start, start);
+        break;
+      }
+
+      case 'w': {
+        const before = value.slice(0, start);
+        const match = before.match(/\S+\s*$/);
+        if (match) {
+          const cutStart = start - match[0].length;
+          input.value = value.slice(0, cutStart) + value.slice(end);
+          input.setSelectionRange(cutStart, cutStart);
+        }
+        break;
+      }
+
+      case 'l': {
+        this.clear();
+        break;
+      }
+
+      case 'r': {
+        this.historyModal.open(this.history.all());
+        break;
+      }
     }
   }
 
@@ -268,7 +338,10 @@ export class Terminal {
       .querySelectorAll('.term-autocomplete-item')
       .forEach((el) => {
         el.addEventListener('click', () => {
-          const idx = parseInt((el as HTMLElement).dataset.index || '0', 10);
+          const idx = parseInt(
+            (el as HTMLElement).dataset.index || '0',
+            10,
+          );
           this.applyCompletion(idx);
         });
       });
@@ -318,7 +391,10 @@ export class Terminal {
   }
 }
 
-/** Dummy-репозиторий, если контекст не передан. */
+// ═══════════════════════════════════════════
+// DUMMY REPO (если контекст не передан)
+// ═══════════════════════════════════════════
+
 function createDummyRepo(): CommandContext['repo'] {
   return {
     users: {
