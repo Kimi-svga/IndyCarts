@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qsl
 
@@ -35,11 +36,11 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ═════════════════════════════════════════════
-# AUTH — проверка Telegram initData
+# AUTH — Telegram initData → JWT
 # ═════════════════════════════════════════════
 
 def verify_init_data(init_data: str, bot_token: str) -> dict:
-    """Проверяет подпись Telegram initData."""
+    """Проверяет подпись Telegram initData (HMAC-SHA256)."""
     parsed = dict(parse_qsl(init_data, keep_blank_values=True))
     received_hash = parsed.pop("hash", None)
     if not received_hash:
@@ -254,7 +255,6 @@ async def get_card_image(card_id: int):
     if not card.image_file_id:
         raise HTTPException(404, "Card has no image")
 
-    # Ленивый импорт — чтобы не было циклической зависимости
     from main import bot
 
     try:
@@ -268,6 +268,262 @@ async def get_card_image(card_id: int):
         media_type="image/jpeg",
         headers={"Cache-Control": "public, max-age=86400"},
     )
+
+
+# ═════════════════════════════════════════════
+# ADMIN COMMAND — выполнение команд терминала
+# ═════════════════════════════════════════════
+
+class CommandRequest(BaseModel):
+    command: str
+    args: list[str] = []
+    flags: dict[str, str | bool] = {}
+
+
+@router.post("/admin/command")
+async def admin_command(
+    payload: CommandRequest,
+    user: User = Depends(get_current_user),
+):
+    """Выполнить админ-команду. Только owner/admin."""
+    if (
+        user.telegram_id not in settings.OWNER_IDS
+        and user.telegram_id not in settings.ADMIN_IDS
+    ):
+        raise HTTPException(403, "Insufficient permissions")
+
+    async with AsyncSessionLocal() as session:
+        result = await _dispatch_command(
+            session, payload.command, payload.args, payload.flags
+        )
+
+    return {"result": result}
+
+
+async def _dispatch_command(
+    session,
+    command: str,
+    args: list[str],
+    flags: dict[str, str | bool],
+):
+    """Роутер команд терминала."""
+    from db.models import User as UserModel, UserCard, Card
+
+    # ─── user.info ───
+    if command == "user.info":
+        username = args[0].lstrip("@").lower()
+        u = (await session.execute(
+            select(UserModel).where(UserModel.username_normalized == username)
+        )).scalar_one_or_none()
+
+        if u is None:
+            raise HTTPException(404, f"@{username} not found")
+
+        return {
+            "id": u.id,
+            "telegramId": u.telegram_id,
+            "username": u.username,
+            "balance": u.balance,
+            "pvpRating": u.pvp_rating,
+            "pvpWins": u.pvp_wins,
+            "pvpLosses": u.pvp_losses,
+            "dailyStreak": u.daily_streak,
+            "trustScore": u.trust_score,
+            "plusTier": u.plus_tier,
+            "plusExpiresAt": u.plus_expires_at.isoformat() if u.plus_expires_at else None,
+            "banLevel": u.ban_level,
+        }
+
+    # ─── user.list ───
+    if command == "user.list":
+        stmt = select(UserModel).order_by(UserModel.balance.desc())
+        if flags.get("plus"):
+            stmt = stmt.where(UserModel.plus_tier == "indy_plus")
+        limit = int(flags.get("limit", 20)) if isinstance(flags.get("limit"), str) else 20
+        stmt = stmt.limit(limit)
+        users = (await session.execute(stmt)).scalars().all()
+
+        return [
+            {
+                "id": u.id,
+                "telegramId": u.telegram_id,
+                "username": u.username,
+                "balance": u.balance,
+                "pvpRating": u.pvp_rating,
+                "pvpWins": u.pvp_wins,
+                "pvpLosses": u.pvp_losses,
+                "dailyStreak": u.daily_streak,
+                "trustScore": u.trust_score,
+                "plusTier": u.plus_tier,
+                "plusExpiresAt": u.plus_expires_at.isoformat() if u.plus_expires_at else None,
+                "banLevel": u.ban_level,
+            }
+            for u in users
+        ]
+
+    # ─── user.search ───
+    if command == "user.search":
+        query = str(flags.get("query", "")).lower()
+        users = (await session.execute(
+            select(UserModel)
+            .where(UserModel.username_normalized.ilike(f"%{query}%"))
+            .limit(20)
+        )).scalars().all()
+
+        return [
+            {
+                "id": u.id,
+                "telegramId": u.telegram_id,
+                "username": u.username,
+                "balance": u.balance,
+                "pvpRating": u.pvp_rating,
+                "pvpWins": u.pvp_wins,
+                "pvpLosses": u.pvp_losses,
+                "dailyStreak": u.daily_streak,
+                "trustScore": u.trust_score,
+                "plusTier": u.plus_tier,
+                "plusExpiresAt": None,
+                "banLevel": u.ban_level,
+            }
+            for u in users
+        ]
+
+    # ─── user.ban ───
+    if command == "user.ban":
+        user_id = int(args[0])
+        duration = str(flags.get("duration", "30d"))
+        reason = str(flags.get("reason", "no reason"))
+
+        target = await session.get(UserModel, user_id)
+        if target is None:
+            raise HTTPException(404, "user not found")
+
+        target.ban_level = "ban"
+        if duration == "perm":
+            target.ban_expires_at = None
+        else:
+            days = 30
+            if duration.endswith("d"):
+                try:
+                    days = int(duration[:-1])
+                except ValueError:
+                    days = 30
+            elif duration.endswith("h"):
+                try:
+                    days = max(1, int(duration[:-1]) // 24)
+                except ValueError:
+                    days = 30
+            target.ban_expires_at = datetime.utcnow() + timedelta(days=days)
+
+        await session.commit()
+        return {
+            "ok": True,
+            "username": target.username,
+            "duration": duration,
+            "reason": reason,
+        }
+
+    # ─── user.unban ───
+    if command == "user.unban":
+        user_id = int(args[0])
+        target = await session.get(UserModel, user_id)
+        if target is None:
+            raise HTTPException(404, "user not found")
+        target.ban_level = "none"
+        target.ban_expires_at = None
+        await session.commit()
+        return {"ok": True, "username": target.username}
+
+    # ─── user.set-balance ───
+    if command == "user.set-balance":
+        user_id = int(args[0])
+        amount = int(flags.get("amount", 0))
+        target = await session.get(UserModel, user_id)
+        if target is None:
+            raise HTTPException(404, "user not found")
+        old = target.balance
+        target.balance = amount
+        await session.commit()
+        return {
+            "ok": True,
+            "username": target.username,
+            "old": old,
+            "new": amount,
+        }
+
+    # ─── card.list ───
+    if command == "card.list":
+        stmt = select(Card).where(Card.is_active == True)
+        if flags.get("rarity"):
+            stmt = stmt.where(Card.rarity == flags["rarity"])
+        limit = int(flags.get("limit", 20)) if isinstance(flags.get("limit"), str) else 20
+        stmt = stmt.limit(limit)
+        cards = (await session.execute(stmt)).scalars().all()
+
+        return [
+            {
+                "id": c.id,
+                "name": c.name,
+                "rarity": c.rarity,
+                "team": c.team,
+                "year": c.year,
+                "price": c.current_price,
+                "imageUrl": f"/api/cards/{c.id}/image" if c.image_file_id else None,
+                "count": 0,
+                "maxSupply": c.max_supply,
+                "issued": c.issued,
+            }
+            for c in cards
+        ]
+
+    # ─── card.info ───
+    if command == "card.info":
+        card_id = int(flags.get("id", 0))
+        c = await session.get(Card, card_id)
+        if c is None:
+            raise HTTPException(404, "card not found")
+
+        return {
+            "id": c.id,
+            "name": c.name,
+            "rarity": c.rarity,
+            "team": c.team,
+            "year": c.year,
+            "price": c.current_price,
+            "imageUrl": f"/api/cards/{c.id}/image" if c.image_file_id else None,
+            "count": 0,
+            "maxSupply": c.max_supply,
+            "issued": c.issued,
+        }
+
+    # ─── card.set-price ───
+    if command == "card.set-price":
+        card_id = int(flags.get("id", 0))
+        price = int(flags.get("price", 0))
+        c = await session.get(Card, card_id)
+        if c is None:
+            raise HTTPException(404, "card not found")
+        old = c.current_price
+        c.current_price = price
+        await session.commit()
+        return {"ok": True, "name": c.name, "old": old, "new": price}
+
+    # ─── card.give ───
+    if command == "card.give":
+        user_id = int(args[0])
+        card_id = int(flags.get("id", 0))
+        u = await session.get(UserModel, user_id)
+        if u is None:
+            raise HTTPException(404, "user not found")
+        c = await session.get(Card, card_id)
+        if c is None:
+            raise HTTPException(404, "card not found")
+
+        session.add(UserCard(user_id=u.id, card_id=c.id, acquired_price=0))
+        await session.commit()
+        return {"ok": True, "username": u.username, "card": c.name}
+
+    raise HTTPException(400, f"unknown command: {command}")
 
 
 # ═════════════════════════════════════════════
