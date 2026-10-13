@@ -1,5 +1,6 @@
 /**
  * Visual Merge — точка входа.
+ * Design by Expo
  */
 
 import './styles/global.css';
@@ -17,25 +18,11 @@ if (!app) {
 if (window.Telegram?.WebApp) {
   window.Telegram.WebApp.ready();
   window.Telegram.WebApp.expand();
-  window.Telegram.WebApp.setHeaderColor('#0d0d0d');
-  window.Telegram.WebApp.setBackgroundColor('#0d0d0d');
+  window.Telegram.WebApp.setHeaderColor('#0a0a0a');
+  window.Telegram.WebApp.setBackgroundColor('#0a0a0a');
 }
 
-// Приветствие (компактное, без лишних отступов)
-const greeting = `
-  <div class="term-boot">
-    <div><span class="ok">[OK]</span> database</div>
-    <div><span class="ok">[OK]</span> bot_api</div>
-    <div><span class="ok">[OK]</span> webhook</div>
-    <div><span class="ok">[OK]</span> terminal</div>
-    <div><span class="ok">[OK]</span> commands</div>
-  </div>
-  <div class="term-hint">
-    Введи <span class="tok-cmd">help</span> для списка команд.
-  </div>
-`;
-
-// Создаём окно терминала
+// ─── Окно терминала (рамка + titlebar) ───
 const windowEl = document.createElement('div');
 windowEl.className = 'term-window';
 windowEl.innerHTML = `
@@ -50,7 +37,25 @@ windowEl.innerHTML = `
 `;
 app.appendChild(windowEl);
 
-// Терминал внутри окна
+// ─── Приветствие ───
+const greeting = `
+  <div class="term-brand">
+    <span class="term-brand-name">VISUAL</span>
+    <span class="term-brand-accent">MERGE</span>
+  </div>
+  <div class="term-boot">
+    <div><span class="ok">[OK]</span> database</div>
+    <div><span class="ok">[OK]</span> bot_api</div>
+    <div><span class="ok">[OK]</span> webhook</div>
+    <div><span class="ok">[OK]</span> terminal</div>
+    <div><span class="ok">[OK]</span> commands</div>
+  </div>
+  <div class="term-hint">
+    Введи <span class="tok-cmd">help</span> для списка команд.
+  </div>
+`;
+
+// ─── Терминал ───
 const terminal = new Terminal(windowEl, {
   prompt: 'root@indycarts:~#',
   greeting,
@@ -58,8 +63,8 @@ const terminal = new Terminal(windowEl, {
 
 registerCommands(terminal);
 
-// Подпись внизу
+// ─── Подпись ───
 const credit = document.createElement('div');
 credit.className = 'design-credit';
 credit.textContent = 'Design by Expo';
-app.appendChild(credit); 
+app.appendChild(credit);
