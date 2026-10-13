@@ -74,6 +74,46 @@ for r in (
 
 
 # ═════════════════════════════════════════════
+# РЕЕСТР ФОНОВЫХ ЗАДАЧ
+# ═════════════════════════════════════════════
+
+class BackgroundTaskRegistry:
+    """Отслеживает фоновые задачи и жёстко отменяет их при shutdown."""
+
+    def __init__(self) -> None:
+        self._tasks: set[asyncio.Task] = set()
+
+    def spawn(self, coro, name: str = "task") -> asyncio.Task:
+        """Запустить задачу и запомнить её (strong reference)."""
+        task = asyncio.create_task(coro, name=name)
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+        return task
+
+    async def shutdown(self, timeout: float = 5.0) -> None:
+        """Отменить все задачи и дождаться завершения."""
+        if not self._tasks:
+            logger.info("📭 Нет активных задач")
+            return
+
+        logger.info(f"🛑 Отмена {len(self._tasks)} задач...")
+
+        for task in self._tasks:
+            task.cancel()
+
+        done, pending = await asyncio.wait(
+            self._tasks,
+            timeout=timeout,
+            return_exceptions=True,
+        )
+
+        if pending:
+            logger.warning(f"⚠️ Не завершились: {len(pending)}")
+        else:
+            logger.info(f"✅ Отменено: {len(done)}")
+
+
+# ═════════════════════════════════════════════
 # КРОН-ЗАДАЧИ
 # ═════════════════════════════════════════════
 
@@ -616,22 +656,32 @@ async def clan_invites_expire_task() -> None:
 async def lifespan(app: FastAPI):
     logger.info("🚀 Запуск Indy Carts v1.6.0 (Visual Merge)...")
 
+    registry = BackgroundTaskRegistry()
+
+    # ═══ БД ═══
     await init_db()
 
-    asyncio.create_task(save_prices_task())
-    asyncio.create_task(market_task())
-    asyncio.create_task(loan_check_task())
-    asyncio.create_task(subscription_check_task())
-    asyncio.create_task(plus_monthly_rewards_task())
-    asyncio.create_task(pvp_season_task())
-    asyncio.create_task(pvp_timeout_task())
-    asyncio.create_task(auction_close_task())
-    asyncio.create_task(daily_stats_task())
-    asyncio.create_task(ban_expire_task())
-    asyncio.create_task(tickets_auto_close_task())
-    asyncio.create_task(clan_invites_expire_task())
+    # ═══ Cron-задачи ═══
+    registry.spawn(save_prices_task(), name="save_prices")
+    registry.spawn(market_task(), name="market")
+    registry.spawn(loan_check_task(), name="loan_check")
+    registry.spawn(subscription_check_task(), name="subscription_check")
+    registry.spawn(plus_monthly_rewards_task(), name="plus_monthly")
+    registry.spawn(pvp_season_task(), name="pvp_season")
+    registry.spawn(pvp_timeout_task(), name="pvp_timeout")
+    registry.spawn(auction_close_task(), name="auction_close")
+    registry.spawn(daily_stats_task(), name="daily_stats")
+    registry.spawn(ban_expire_task(), name="ban_expire")
+    registry.spawn(tickets_auto_close_task(), name="tickets_auto_close")
+    registry.spawn(clan_invites_expire_task(), name="clan_invites_expire")
 
+    # ═══ Webhook ═══
     webhook_url = f"{settings.WEBHOOK_URL}/webhook"
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+    except Exception:
+        pass
+
     await bot.set_webhook(
         url=webhook_url,
         secret_token=settings.WEBHOOK_SECRET,
@@ -642,9 +692,34 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    await bot.session.close()
-    await close_db()
-    logger.info("🛑 Остановлен")
+    # ═══ SHUTDOWN — жёсткий ═══
+    logger.info("🛑 Shutdown начат...")
+
+    # 1. Отменяем фоновые задачи
+    await registry.shutdown(timeout=5.0)
+
+    # 2. Удаляем вебхук
+    try:
+        await bot.delete_webhook()
+        logger.info("✅ Вебхук удалён")
+    except Exception as e:
+        logger.error(f"Вебхук: {e}")
+
+    # 3. Закрываем бота
+    try:
+        await bot.session.close()
+        logger.info("✅ Bot session закрыта")
+    except Exception as e:
+        logger.error(f"Bot session: {e}")
+
+    # 4. Закрываем БД
+    try:
+        await close_db()
+        logger.info("✅ DB закрыта")
+    except Exception as e:
+        logger.error(f"DB: {e}")
+
+    logger.info("🛑 Остановлен полностью")
 
 
 app = FastAPI(title="Indy Carts", version="1.6.0", lifespan=lifespan)
@@ -685,11 +760,17 @@ async def health() -> dict:
 
 
 # ═════════════════════════════════════════════
-# API (Visual Merge)
+# API (Visual Merge) — с защитой от двойного include
 # ═════════════════════════════════════════════
 
 from api import router as api_router
-app.include_router(api_router)
+
+if not getattr(api_router, "_vm_attached", False):
+    app.include_router(api_router)
+    api_router._vm_attached = True  # type: ignore[attr-defined]
+    logger.info("✅ API router подключён")
+else:
+    logger.warning("⚠️ API router уже подключён — пропуск")
 
 
 # ═════════════════════════════════════════════
