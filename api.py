@@ -14,6 +14,7 @@ from jose import JWTError, jwt
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
+from bot_instance import bot
 from core.config import settings
 from core.constants import (
     BAN_LEVELS, BAN_NAMES, BASE_PRICES, CLAN_LEVELS,
@@ -36,7 +37,7 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ═════════════════════════════════════════════
-# AUTH — Telegram initData → JWT
+# AUTH
 # ═════════════════════════════════════════════
 
 def verify_init_data(init_data: str, bot_token: str) -> dict:
@@ -106,7 +107,7 @@ async def auth_telegram(payload: AuthRequest) -> AuthResponse:
 
 
 # ═════════════════════════════════════════════
-# DEPS — текущий юзер из JWT
+# DEPS
 # ═════════════════════════════════════════════
 
 async def get_current_user(
@@ -135,7 +136,7 @@ async def get_current_user(
 
 
 # ═════════════════════════════════════════════
-# ME — профиль игрока
+# ME
 # ═════════════════════════════════════════════
 
 @router.get("/me")
@@ -172,7 +173,7 @@ async def get_me(user: User = Depends(get_current_user)):
 
 
 # ═════════════════════════════════════════════
-# CONFIG — константы для фронта
+# CONFIG
 # ═════════════════════════════════════════════
 
 @router.get("/config")
@@ -201,7 +202,7 @@ async def get_config():
 
 
 # ═════════════════════════════════════════════
-# CARDS — коллекция и картинки
+# CARDS
 # ═════════════════════════════════════════════
 
 @router.get("/cards")
@@ -255,13 +256,11 @@ async def get_card_image(card_id: int):
     if not card.image_file_id:
         raise HTTPException(404, "Card has no image")
 
-    from main import bot
-
     try:
         file = await bot.get_file(card.image_file_id)
         await bot.download_file(file.file_path, destination=cache_file)
     except Exception as e:
-        raise HTTPException(500, f"Download failed: {e}")
+        raise HTTPException(500, f"Download failed: {type(e).__name__}: {e}")
 
     return FileResponse(
         cache_file,
@@ -271,7 +270,7 @@ async def get_card_image(card_id: int):
 
 
 # ═════════════════════════════════════════════
-# ADMIN COMMAND — выполнение команд терминала
+# ADMIN COMMAND
 # ═════════════════════════════════════════════
 
 class CommandRequest(BaseModel):
@@ -309,7 +308,6 @@ async def _dispatch_command(
     """Роутер команд терминала."""
     from db.models import User as UserModel, UserCard, Card
 
-    # ─── user.info ───
     if command == "user.info":
         username = args[0].lstrip("@").lower()
         u = (await session.execute(
@@ -334,7 +332,6 @@ async def _dispatch_command(
             "banLevel": u.ban_level,
         }
 
-    # ─── user.list ───
     if command == "user.list":
         stmt = select(UserModel).order_by(UserModel.balance.desc())
         if flags.get("plus"):
@@ -361,7 +358,6 @@ async def _dispatch_command(
             for u in users
         ]
 
-    # ─── user.search ───
     if command == "user.search":
         query = str(flags.get("query", "")).lower()
         users = (await session.execute(
@@ -388,7 +384,6 @@ async def _dispatch_command(
             for u in users
         ]
 
-    # ─── user.ban ───
     if command == "user.ban":
         user_id = int(args[0])
         duration = str(flags.get("duration", "30d"))
@@ -423,7 +418,6 @@ async def _dispatch_command(
             "reason": reason,
         }
 
-    # ─── user.unban ───
     if command == "user.unban":
         user_id = int(args[0])
         target = await session.get(UserModel, user_id)
@@ -434,7 +428,6 @@ async def _dispatch_command(
         await session.commit()
         return {"ok": True, "username": target.username}
 
-    # ─── user.set-balance ───
     if command == "user.set-balance":
         user_id = int(args[0])
         amount = int(flags.get("amount", 0))
@@ -451,7 +444,6 @@ async def _dispatch_command(
             "new": amount,
         }
 
-    # ─── card.list ───
     if command == "card.list":
         stmt = select(Card).where(Card.is_active == True)
         if flags.get("rarity"):
@@ -476,7 +468,6 @@ async def _dispatch_command(
             for c in cards
         ]
 
-    # ─── card.info ───
     if command == "card.info":
         card_id = int(flags.get("id", 0))
         c = await session.get(Card, card_id)
@@ -496,7 +487,6 @@ async def _dispatch_command(
             "issued": c.issued,
         }
 
-    # ─── card.set-price ───
     if command == "card.set-price":
         card_id = int(flags.get("id", 0))
         price = int(flags.get("price", 0))
@@ -508,7 +498,6 @@ async def _dispatch_command(
         await session.commit()
         return {"ok": True, "name": c.name, "old": old, "new": price}
 
-    # ─── card.give ───
     if command == "card.give":
         user_id = int(args[0])
         card_id = int(flags.get("id", 0))
@@ -527,7 +516,7 @@ async def _dispatch_command(
 
 
 # ═════════════════════════════════════════════
-# HEALTH — проверка API
+# HEALTH
 # ═════════════════════════════════════════════
 
 @router.get("/health")
@@ -537,4 +526,4 @@ async def api_health():
         "status": "ok",
         "api": "v1",
         "service": "Visual Merge",
-} 
+    }
