@@ -1,6 +1,6 @@
 /**
  * Ядро терминала Visual Merge.
- * Ввод, вывод, история, автодополнение, keypad для мобильных.
+ * Design by Expo
  */
 
 import type { Command, CommandContext } from '@/types/command';
@@ -14,7 +14,6 @@ import { parse } from './parser';
 import { Keypad, type KeypadAction } from './keypad';
 import { HistoryModal } from './history-modal';
 
-/** Базовый контекст без args/flags/input. */
 export type TerminalContext = Omit<CommandContext, 'args' | 'flags' | 'input'>;
 
 export interface TerminalOptions {
@@ -67,17 +66,18 @@ export class Terminal {
     // Render
     this.render();
 
-    // History Modal — до attachEvents
+    // History Modal
     this.historyModal = new HistoryModal(
-      this.container,
+      this.container.parentElement ?? this.container,
       (command: string) => {
         this.inputEl.value = command;
         this.inputEl.focus();
       },
     );
 
-    // Keypad — локальная
-    new Keypad(this.container, this.handleKeypadAction.bind(this));
+    // Keypad — В РОДИТЕЛЕ, вне окна
+    const keypadParent = this.container.parentElement ?? this.container;
+    new Keypad(keypadParent, this.handleKeypadAction.bind(this));
 
     // Events
     this.attachEvents();
@@ -87,17 +87,14 @@ export class Terminal {
     this.inputEl.focus();
   }
 
-  /** Регистрация команд. */
   register(...commands: Command[]): void {
     this.registry.registerAll(commands);
   }
 
-  /** Публичный доступ к реестру (для help). */
   getRegistry(): Registry {
     return this.registry;
   }
 
-  /** Вывод HTML. */
   print(html: string): void {
     const div = document.createElement('div');
     div.className = 'term-line';
@@ -106,12 +103,10 @@ export class Terminal {
     this.scrollToBottom();
   }
 
-  /** Очистить экран. */
   clear(): void {
     this.outputEl.innerHTML = '';
   }
 
-  /** Выполнить команду. */
   async run(input: string): Promise<void> {
     const trimmed = input.trim();
     if (!trimmed) return;
@@ -134,18 +129,14 @@ export class Terminal {
     if (html) this.print(html);
   }
 
-  /** Фокус на input. */
   focus(): void {
     this.inputEl.focus();
   }
 
-  // ═══════════════════════════════════════════
-  // PRIVATE
-  // ═══════════════════════════════════════════
+  // ─── PRIVATE ───
 
   private render(): void {
     this.container.innerHTML = '';
-    this.container.classList.add('terminal');
 
     const inputLine = document.createElement('div');
     inputLine.className = 'term-input-line';
@@ -391,10 +382,6 @@ export class Terminal {
       .replace(/>/g, '&gt;');
   }
 }
-
-// ═══════════════════════════════════════════
-// DUMMY REPO
-// ═══════════════════════════════════════════
 
 function createDummyRepo(): CommandContext['repo'] {
   return {
