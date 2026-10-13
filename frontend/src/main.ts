@@ -5,18 +5,47 @@
 
 import './styles/global.css';
 import './styles/terminal.css';
+import './styles/app.css';
 
 import { Terminal } from '@/core/terminal';
 import { registerCommands } from '@/commands';
 import { authenticate } from '@/api/auth';
 import { createApiRepo } from '@/api/repo';
+import { apiFetch } from '@/api/client';
+
+import { Router } from '@/ui/router';
+import { createHeader } from '@/ui/components/header';
+import { createBottomNav, updateBottomNav } from '@/ui/components/bottom-nav';
+import { renderMenu } from '@/ui/screens/menu';
+import { renderProfile } from '@/ui/screens/profile';
+import { renderCollection } from '@/ui/screens/collection';
+import { renderDrop } from '@/ui/screens/drop';
+import { renderMarket } from '@/ui/screens/market';
+import { renderTerminal } from '@/ui/screens/terminal';
+
+interface MeData {
+  telegram_id: number;
+  username: string;
+  balance: number;
+  cards_count: number;
+  collection_value: number;
+  pvp_rating: number;
+  pvp_wins: number;
+  pvp_losses: number;
+  daily_streak: number;
+  trust_score: number;
+  daily_attempts: number;
+  plus_tier: string;
+  plus_expires_at: string | null;
+  ban_level: string;
+}
 
 const app = document.getElementById('app');
 if (!app) {
   throw new Error('#app not found');
 }
 
-// Telegram WebApp init
+// Telegram WebApp
 if (window.Telegram?.WebApp) {
   window.Telegram.WebApp.ready();
   window.Telegram.WebApp.expand();
@@ -24,74 +53,93 @@ if (window.Telegram?.WebApp) {
   window.Telegram.WebApp.setBackgroundColor('#0a0a0a');
 }
 
-// ─── Окно терминала ───
-const windowEl = document.createElement('div');
-windowEl.className = 'term-window';
-windowEl.innerHTML = `
-  <div class="term-titlebar">
-    <div class="term-dots">
-      <span class="dot red"></span>
-      <span class="dot yellow"></span>
-      <span class="dot green"></span>
-    </div>
-    <div class="term-title">root@indycarts: ~ — bash</div>
-  </div>
-`;
-app.appendChild(windowEl);
+// Глобальное состояние
+let meData: MeData | null = null;
 
-// ─── Приветствие ───
-const greeting = `
-  <div class="term-brand">
-    <span class="term-brand-name">VISUAL</span>
-    <span class="term-brand-accent">MERGE</span>
-  </div>
-  <div class="term-boot">
-    <div><span class="ok">[OK]</span> database</div>
-    <div><span class="ok">[OK]</span> bot_api</div>
-    <div><span class="ok">[OK]</span> webhook</div>
-    <div><span class="ok">[OK]</span> terminal</div>
-    <div><span class="ok">[OK]</span> commands</div>
-  </div>
-  <div class="term-hint">
-    Введи <span class="tok-cmd">help</span> для списка команд.
-  </div>
-`;
+// ─── Лэйаут ───
+const header = createHeader(new Router(document.createElement('div')));
+app.appendChild(header);
 
-// ─── Terminal ───
-const terminal = new Terminal(windowEl, {
-  prompt: 'root@indycarts:~#',
-  greeting,
-});
+const screenContainer = document.createElement('div');
+screenContainer.className = 'app-screen-container';
+app.appendChild(screenContainer);
 
-registerCommands(terminal);
+const router = new Router(screenContainer);
 
-// ─── Подпись ───
+const bottomNav = createBottomNav(router);
+app.appendChild(bottomNav);
+
 const credit = document.createElement('div');
 credit.className = 'design-credit';
 credit.textContent = 'Design by Expo';
 app.appendChild(credit);
 
-// ─── Auth + подключение repo ───
+// ─── Роуты ───
+router.register('menu', (el) => {
+  renderMenu(el, router, meData);
+  updateBottomNav('menu');
+});
+
+router.register('profile', (el) => {
+  renderProfile(el, meData);
+  updateBottomNav('profile');
+});
+
+router.register('collection', async (el) => {
+  await renderCollection(el);
+  updateBottomNav('collection');
+});
+
+router.register('drop', (el) => {
+  renderDrop(el);
+  updateBottomNav('drop');
+});
+
+router.register('market', (el) => {
+  renderMarket(el);
+  updateBottomNav('market');
+});
+
+router.register('terminal', (el) => {
+  renderTerminal(el);
+  updateBottomNav(null);
+});
+
+// ─── Auth + стартовый экран ───
 (async () => {
   const authResult = await authenticate();
 
   if (authResult) {
+    try {
+      meData = await apiFetch<MeData>('/api/me');
+    } catch (e) {
+      console.error('[main] failed to load /api/me', e);
+    }
+
+    // Глобальный терминал — для контекста
     const repo = createApiRepo();
-    terminal.setContext({
+    const tempContainer = document.createElement('div');
+    const globalTerminal = new Terminal(tempContainer, {});
+    globalTerminal.setContext({
       repo,
-      print: (html: string) => terminal.print(html),
+      print: (html: string) => globalTerminal.print(html),
       user: {
         telegramId: authResult.telegram_id,
         username: authResult.username,
         role: 'owner',
       },
     });
-    terminal.print(
-      `<span class="tok-success">✓ Авторизация: @${authResult.username}</span>`,
-    );
-  } else {
-    terminal.print(
-      `<span class="tok-warn">⚠ Demo mode — данные не сохраняются</span>`,
-    );
+
+    (window as unknown as { __vm_terminal?: Terminal }).__vm_terminal =
+      globalTerminal;
   }
-})(); 
+
+  await router.navigate('menu');
+})();
+
+// Обновление header при навигации (иконка терминала)
+const originalNavigate = router.navigate.bind(router);
+router.navigate = async (name) => {
+  await originalNavigate(name);
+  updateBottomNav(name);
+};
