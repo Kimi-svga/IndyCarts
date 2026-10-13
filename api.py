@@ -30,7 +30,7 @@ router = APIRouter(prefix="/api", tags=["api"])
 
 JWT_SECRET = settings.WEBHOOK_SECRET
 JWT_ALGO = "HS256"
-JWT_TTL = 60 * 60 * 24 * 7  # 7 дней
+JWT_TTL = 60 * 60 * 24 * 7
 
 CACHE_DIR = Path("/tmp/indy_cards_cache")
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -41,7 +41,6 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 # ═════════════════════════════════════════════
 
 def verify_init_data(init_data: str, bot_token: str) -> dict:
-    """Проверяет подпись Telegram initData (HMAC-SHA256)."""
     parsed = dict(parse_qsl(init_data, keep_blank_values=True))
     received_hash = parsed.pop("hash", None)
     if not received_hash:
@@ -83,7 +82,6 @@ class AuthResponse(BaseModel):
 
 @router.post("/auth/telegram", response_model=AuthResponse)
 async def auth_telegram(payload: AuthRequest) -> AuthResponse:
-    """Принимает initData, возвращает JWT."""
     try:
         tg_user = verify_init_data(payload.init_data, settings.BOT_TOKEN)
     except ValueError as e:
@@ -113,7 +111,6 @@ async def auth_telegram(payload: AuthRequest) -> AuthResponse:
 async def get_current_user(
     authorization: str = Header(...),
 ) -> User:
-    """Достаёт User из JWT."""
     if not authorization.startswith("Bearer "):
         raise HTTPException(401, "Invalid auth header")
 
@@ -141,7 +138,6 @@ async def get_current_user(
 
 @router.get("/me")
 async def get_me(user: User = Depends(get_current_user)):
-    """Профиль игрока."""
     async with AsyncSessionLocal() as session:
         cards_count = (await session.execute(
             select(func.count(UserCard.id)).where(UserCard.user_id == user.id)
@@ -178,7 +174,6 @@ async def get_me(user: User = Depends(get_current_user)):
 
 @router.get("/config")
 async def get_config():
-    """Все константы для Visual Merge."""
     return {
         "rarities": RARITIES,
         "rarityNames": RARITY_NAMES,
@@ -207,7 +202,6 @@ async def get_config():
 
 @router.get("/cards")
 async def get_cards(user: User = Depends(get_current_user)):
-    """Коллекция игрока."""
     async with AsyncSessionLocal() as session:
         rows = (await session.execute(
             select(
@@ -239,7 +233,6 @@ async def get_cards(user: User = Depends(get_current_user)):
 
 @router.get("/cards/{card_id}/image")
 async def get_card_image(card_id: int):
-    """Прокси картинки карты из Telegram (с кэшем)."""
     cache_file = CACHE_DIR / f"{card_id}.jpg"
     if cache_file.exists():
         return FileResponse(
@@ -270,6 +263,106 @@ async def get_card_image(card_id: int):
 
 
 # ═════════════════════════════════════════════
+# CARD ACTIONS
+# ═════════════════════════════════════════════
+
+class SellCardRequest(BaseModel):
+    card_id: int
+
+
+class GiftCardRequest(BaseModel):
+    card_id: int
+    username: str
+
+
+@router.post("/card/sell")
+async def sell_card(
+    payload: SellCardRequest,
+    user: User = Depends(get_current_user),
+):
+    async with AsyncSessionLocal() as session:
+        user_card = (await session.execute(
+            select(UserCard)
+            .where(
+                UserCard.user_id == user.id,
+                UserCard.card_id == payload.card_id,
+                UserCard.is_locked == False,
+            )
+            .limit(1)
+        )).scalar_one_or_none()
+
+        if user_card is None:
+            raise HTTPException(404, "Карта не найдена")
+
+        card = await session.get(Card, payload.card_id)
+        if card is None:
+            raise HTTPException(404, "Карта не найдена")
+
+        price = int(card.current_price * 0.9)
+
+        await session.delete(user_card)
+
+        user_row = await session.get(User, user.id)
+        if user_row is None:
+            raise HTTPException(404, "Юзер не найден")
+        user_row.balance += price
+
+        await session.commit()
+
+        return {
+            "ok": True,
+            "card_name": card.name,
+            "price": price,
+            "new_balance": user_row.balance,
+        }
+
+
+@router.post("/card/gift")
+async def gift_card(
+    payload: GiftCardRequest,
+    user: User = Depends(get_current_user),
+):
+    username = payload.username.lstrip("@").lower()
+
+    if username == user.username_normalized:
+        raise HTTPException(400, "Нельзя подарить себе")
+
+    async with AsyncSessionLocal() as session:
+        receiver = (await session.execute(
+            select(User).where(User.username_normalized == username)
+        )).scalar_one_or_none()
+
+        if receiver is None:
+            raise HTTPException(404, f"@{username} не найден")
+
+        user_card = (await session.execute(
+            select(UserCard)
+            .where(
+                UserCard.user_id == user.id,
+                UserCard.card_id == payload.card_id,
+                UserCard.is_locked == False,
+            )
+            .limit(1)
+        )).scalar_one_or_none()
+
+        if user_card is None:
+            raise HTTPException(404, "Карта не найдена")
+
+        card = await session.get(Card, payload.card_id)
+        if card is None:
+            raise HTTPException(404, "Карта не найдена")
+
+        user_card.user_id = receiver.id
+        await session.commit()
+
+        return {
+            "ok": True,
+            "card_name": card.name,
+            "receiver": receiver.username,
+        }
+
+
+# ═════════════════════════════════════════════
 # ADMIN COMMAND
 # ═════════════════════════════════════════════
 
@@ -284,7 +377,6 @@ async def admin_command(
     payload: CommandRequest,
     user: User = Depends(get_current_user),
 ):
-    """Выполнить админ-команду. Только owner/admin."""
     if (
         user.telegram_id not in settings.OWNER_IDS
         and user.telegram_id not in settings.ADMIN_IDS
@@ -305,7 +397,6 @@ async def _dispatch_command(
     args: list[str],
     flags: dict[str, str | bool],
 ):
-    """Роутер команд терминала."""
     from db.models import User as UserModel, UserCard, Card
 
     if command == "user.info":
@@ -521,7 +612,6 @@ async def _dispatch_command(
 
 @router.get("/health")
 async def api_health():
-    """Проверка API."""
     return {
         "status": "ok",
         "api": "v1",
