@@ -8,6 +8,8 @@ import './styles/terminal.css';
 
 import { Terminal } from '@/core/terminal';
 import { registerCommands } from '@/commands';
+import { authenticate } from '@/api/auth';
+import { createApiRepo } from '@/api/repo';
 
 const app = document.getElementById('app');
 if (!app) {
@@ -22,7 +24,7 @@ if (window.Telegram?.WebApp) {
   window.Telegram.WebApp.setBackgroundColor('#0a0a0a');
 }
 
-// ─── Окно терминала (рамка + titlebar) ───
+// ─── Окно терминала ───
 const windowEl = document.createElement('div');
 windowEl.className = 'term-window';
 windowEl.innerHTML = `
@@ -55,7 +57,7 @@ const greeting = `
   </div>
 `;
 
-// ─── Терминал ───
+// ─── Terminal ───
 const terminal = new Terminal(windowEl, {
   prompt: 'root@indycarts:~#',
   greeting,
@@ -68,3 +70,28 @@ const credit = document.createElement('div');
 credit.className = 'design-credit';
 credit.textContent = 'Design by Expo';
 app.appendChild(credit);
+
+// ─── Auth + подключение repo ───
+(async () => {
+  const authResult = await authenticate();
+
+  if (authResult) {
+    const repo = createApiRepo();
+    terminal.setContext({
+      repo,
+      print: (html: string) => terminal.print(html),
+      user: {
+        telegramId: authResult.telegram_id,
+        username: authResult.username,
+        role: 'owner',
+      },
+    });
+    terminal.print(
+      `<span class="tok-success">✓ Авторизация: @${authResult.username}</span>`,
+    );
+  } else {
+    terminal.print(
+      `<span class="tok-warn">⚠ Demo mode — данные не сохраняются</span>`,
+    );
+  }
+})(); 
