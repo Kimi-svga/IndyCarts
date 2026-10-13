@@ -4,6 +4,7 @@ import asyncio
 import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.client.default import DefaultBotProperties
@@ -11,6 +12,8 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.callback_answer import CallbackAnswerMiddleware
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
 
 from bot.handlers import (
@@ -57,8 +60,6 @@ dp.callback_query.middleware(BanMiddleware())
 dp.callback_query.middleware(CallbackAnswerMiddleware())
 
 # ─── РОУТЕРЫ ───
-# ВАЖНО: clan идёт ПОСЛЕДНИМ, чтобы FSM-хендлеры clan
-# не перехватывали сообщения других модулей.
 for r in (
     start, profile, cards, daily, market, pvp,
     bank, rating, promo, admin, admin_bans, admin_tools,
@@ -583,7 +584,6 @@ async def tickets_auto_close_task() -> None:
 
 
 async def clan_invites_expire_task() -> None:
-    """Протухание просроченных приглашений в кланы."""
     from db.models import ClanInvite
     while True:
         await asyncio.sleep(3600)
@@ -614,7 +614,7 @@ async def clan_invites_expire_task() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 Запуск Indy Carts v1.5.0...")
+    logger.info("🚀 Запуск Indy Carts v1.6.0 (Visual Merge)...")
 
     await init_db()
 
@@ -647,8 +647,12 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Остановлен")
 
 
-app = FastAPI(title="Indy Carts", version="1.5.0", lifespan=lifespan)
+app = FastAPI(title="Indy Carts", version="1.6.0", lifespan=lifespan)
 
+
+# ═════════════════════════════════════════════
+# WEBHOOK (бот)
+# ═════════════════════════════════════════════
 
 @app.post("/webhook")
 async def webhook(request: Request) -> Response:
@@ -672,12 +676,64 @@ async def health() -> dict:
         me = await bot.get_me()
         return {
             "status": "ok",
-            "version": "1.5.0",
+            "version": "1.6.0",
             "bot": me.username,
             "webhook": info.url,
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+# ═════════════════════════════════════════════
+# API (Visual Merge)
+# ═════════════════════════════════════════════
+
+from api import router as api_router
+app.include_router(api_router)
+
+
+# ═════════════════════════════════════════════
+# FRONTEND (Visual Merge)
+# ═════════════════════════════════════════════
+
+FRONTEND_DIST = Path(__file__).parent / "frontend" / "dist"
+if not FRONTEND_DIST.exists():
+    FRONTEND_DIST = Path("/app/frontend/dist")
+
+if FRONTEND_DIST.exists():
+    logger.info(f"📱 Frontend: {FRONTEND_DIST}")
+
+    assets_dir = FRONTEND_DIST / "assets"
+    if assets_dir.exists():
+        app.mount(
+            "/assets",
+            StaticFiles(directory=assets_dir),
+            name="assets",
+        )
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        if full_path.startswith(("api/", "webhook", "health")):
+            return Response(status_code=404)
+        index = FRONTEND_DIST / "index.html"
+        if index.exists():
+            return FileResponse(index)
+        return Response(status_code=404)
+
+    @app.get("/")
+    async def serve_root():
+        return FileResponse(FRONTEND_DIST / "index.html")
+
+else:
+    logger.warning(f"⚠️ Frontend not built: {FRONTEND_DIST}")
+
+    @app.get("/")
+    async def root():
+        return {
+            "status": "ok",
+            "service": "IndyCarts",
+            "message": "Visual Merge not built yet",
+        }
 
 
 if __name__ == "__main__":
