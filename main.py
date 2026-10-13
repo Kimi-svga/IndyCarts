@@ -6,9 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from aiogram import Bot, Dispatcher, types
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
+from aiogram import Dispatcher, types
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.callback_answer import CallbackAnswerMiddleware
 from fastapi import FastAPI, Request, Response
@@ -26,6 +24,7 @@ from bot.middlewares.ban import BanMiddleware
 from bot.middlewares.last_seen import LastSeenMiddleware
 from bot.middlewares.logger import LoggingMiddleware
 from bot.middlewares.user import UserMiddleware
+from bot_instance import bot
 from core.config import settings
 from core.constants import (
     AUCTION_COMMISSION, AUCTION_COMMISSION_PLUS, PVP_SEASON_REWARDS,
@@ -41,10 +40,6 @@ from db.session import AsyncSessionLocal, close_db, init_db
 logger = setup_logger()
 
 storage = MemoryStorage()
-bot = Bot(
-    token=settings.BOT_TOKEN,
-    default=DefaultBotProperties(parse_mode=ParseMode.HTML),
-)
 dp = Dispatcher(storage=storage)
 
 # ─── MIDDLEWARE ───
@@ -695,24 +690,20 @@ async def lifespan(app: FastAPI):
     # ═══ SHUTDOWN — жёсткий ═══
     logger.info("🛑 Shutdown начат...")
 
-    # 1. Отменяем фоновые задачи
     await registry.shutdown(timeout=5.0)
 
-    # 2. Удаляем вебхук
     try:
         await bot.delete_webhook()
         logger.info("✅ Вебхук удалён")
     except Exception as e:
         logger.error(f"Вебхук: {e}")
 
-    # 3. Закрываем бота
     try:
         await bot.session.close()
         logger.info("✅ Bot session закрыта")
     except Exception as e:
         logger.error(f"Bot session: {e}")
 
-    # 4. Закрываем БД
     try:
         await close_db()
         logger.info("✅ DB закрыта")
@@ -760,7 +751,7 @@ async def health() -> dict:
 
 
 # ═════════════════════════════════════════════
-# API (Visual Merge) — с защитой от двойного include
+# API (Visual Merge) — с защитой
 # ═════════════════════════════════════════════
 
 from api import router as api_router
