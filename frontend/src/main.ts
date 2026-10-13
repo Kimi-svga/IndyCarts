@@ -21,16 +21,8 @@ if (window.Telegram?.WebApp) {
   window.Telegram.WebApp.setBackgroundColor('#0d0d0d');
 }
 
-// Приветствие
+// Приветствие (компактное, без лишних отступов)
 const greeting = `
-  <div class="term-brand">
-    <div class="term-brand-title">
-      VISUAL <span>MERGE</span>
-    </div>
-    <div class="term-brand-sub">
-      IndyCarts Engine · Design by Expo
-    </div>
-  </div>
   <div class="term-boot">
     <div><span class="ok">[OK]</span> database</div>
     <div><span class="ok">[OK]</span> bot_api</div>
@@ -43,11 +35,31 @@ const greeting = `
   </div>
 `;
 
-// Создаём терминал
-const terminal = new Terminal(app, {
+// Создаём окно терминала
+const windowEl = document.createElement('div');
+windowEl.className = 'term-window';
+windowEl.innerHTML = `
+  <div class="term-titlebar">
+    <div class="term-dots">
+      <span class="dot red"></span>
+      <span class="dot yellow"></span>
+      <span class="dot green"></span>
+    </div>
+    <div class="term-title">root@indycarts: ~ — bash</div>
+  </div>
+`;
+app.appendChild(windowEl);
+
+// Терминал внутри окна
+const terminal = new Terminal(windowEl, {
   prompt: 'root@indycarts:~#',
   greeting,
 });
 
-// Регистрируем команды
-registerCommands(terminal); 
+registerCommands(terminal);
+
+// Подпись внизу
+const credit = document.createElement('div');
+credit.className = 'design-credit';
+credit.textContent = 'Design by Expo';
+app.appendChild(credit); 
