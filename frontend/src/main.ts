@@ -8,7 +8,6 @@ import './styles/terminal.css';
 import './styles/app.css';
 
 import { Terminal } from '@/core/terminal';
-import { registerCommands } from '@/commands';
 import { authenticate } from '@/api/auth';
 import { createApiRepo } from '@/api/repo';
 import { apiFetch } from '@/api/client';
@@ -45,7 +44,6 @@ if (!app) {
   throw new Error('#app not found');
 }
 
-// Telegram WebApp
 if (window.Telegram?.WebApp) {
   window.Telegram.WebApp.ready();
   window.Telegram.WebApp.expand();
@@ -53,18 +51,16 @@ if (window.Telegram?.WebApp) {
   window.Telegram.WebApp.setBackgroundColor('#0a0a0a');
 }
 
-// Глобальное состояние
 let meData: MeData | null = null;
-
-// ─── Лэйаут ───
-const header = createHeader(new Router(document.createElement('div')));
-app.appendChild(header);
 
 const screenContainer = document.createElement('div');
 screenContainer.className = 'app-screen-container';
-app.appendChild(screenContainer);
 
 const router = new Router(screenContainer);
+
+const header = createHeader(router);
+app.appendChild(header);
+app.appendChild(screenContainer);
 
 const bottomNav = createBottomNav(router);
 app.appendChild(bottomNav);
@@ -76,7 +72,14 @@ app.appendChild(credit);
 
 // ─── Роуты ───
 router.register('menu', (el) => {
-  renderMenu(el, router, meData);
+  const menuData = meData
+    ? {
+        username: meData.username,
+        balance: meData.balance,
+        pvpRating: meData.pvp_rating,
+      }
+    : null;
+  renderMenu(el, router, menuData);
   updateBottomNav('menu');
 });
 
@@ -116,7 +119,6 @@ router.register('terminal', (el) => {
       console.error('[main] failed to load /api/me', e);
     }
 
-    // Глобальный терминал — для контекста
     const repo = createApiRepo();
     const tempContainer = document.createElement('div');
     const globalTerminal = new Terminal(tempContainer, {});
@@ -137,7 +139,7 @@ router.register('terminal', (el) => {
   await router.navigate('menu');
 })();
 
-// Обновление header при навигации (иконка терминала)
+// Обновление bottom-nav при навигации
 const originalNavigate = router.navigate.bind(router);
 router.navigate = async (name) => {
   await originalNavigate(name);
