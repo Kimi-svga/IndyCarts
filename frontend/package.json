@@ -1,0 +1,23 @@
+{
+  "name": "visual-merge",
+  "version": "1.6.0",
+  "description": "Visual Merge — Mini App для IndyCarts",
+  "author": "Expo",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "predev": "cd .. && python scripts/transform.py || true",
+    "prebuild": "cd .. && python scripts/transform.py || true",
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "iconify-icon": "^2.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vite": "^5.4.0"
+  }
+} 
