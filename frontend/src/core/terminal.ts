@@ -44,7 +44,6 @@ export class Terminal {
     this.completer = new Completer(this.registry);
     this.executor = new Executor(this.registry);
 
-    // Input
     this.inputEl = document.createElement('input');
     this.inputEl.type = 'text';
     this.inputEl.className = 'term-input';
@@ -55,18 +54,14 @@ export class Terminal {
     this.inputEl.setAttribute('inputmode', 'text');
     this.inputEl.placeholder = 'введи help...';
 
-    // Output
     this.outputEl = document.createElement('div');
     this.outputEl.className = 'term-output';
 
-    // Autocomplete
     this.autocompleteEl = document.createElement('div');
     this.autocompleteEl.className = 'term-autocomplete';
 
-    // Render
     this.render();
 
-    // History Modal
     this.historyModal = new HistoryModal(
       this.container.parentElement ?? this.container,
       (command: string) => {
@@ -75,14 +70,11 @@ export class Terminal {
       },
     );
 
-    // Keypad — В РОДИТЕЛЕ, вне окна
     const keypadParent = this.container.parentElement ?? this.container;
     new Keypad(keypadParent, this.handleKeypadAction.bind(this));
 
-    // Events
     this.attachEvents();
 
-    // Greeting + Focus
     this.printGreeting();
     this.inputEl.focus();
   }
@@ -93,6 +85,10 @@ export class Terminal {
 
   getRegistry(): Registry {
     return this.registry;
+  }
+
+  setContext(context: TerminalContext): void {
+    this.options.context = context;
   }
 
   print(html: string): void {
@@ -132,8 +128,6 @@ export class Terminal {
   focus(): void {
     this.inputEl.focus();
   }
-
-  // ─── PRIVATE ───
 
   private render(): void {
     this.container.innerHTML = '';
