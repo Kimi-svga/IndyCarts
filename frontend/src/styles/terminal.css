@@ -1,5 +1,6 @@
 /**
  * Visual Merge — стили терминала (macOS Terminal style).
+ * Design by Expo
  */
 
 /* ═══════════════════════════════════════════
@@ -13,18 +14,18 @@
   background: rgba(20, 20, 22, 0.92);
   backdrop-filter: blur(30px) saturate(180%);
   -webkit-backdrop-filter: blur(30px) saturate(180%);
-  border-radius: 12px 12px 0 0;
+  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-bottom: none;
   overflow: hidden;
   box-shadow:
-    0 -8px 40px rgba(0, 0, 0, 0.6),
+    0 8px 40px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  margin: 8px 8px 0;
+  min-height: 0;
+  margin-bottom: 8px;
 }
 
 /* ═══════════════════════════════════════════
-   TITLEBAR (macOS)
+   TITLEBAR
    ═══════════════════════════════════════════ */
 
 .term-titlebar {
@@ -60,7 +61,7 @@
   text-align: center;
   font-family: var(--font-mono);
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.5);
   letter-spacing: 0.3px;
   margin-left: -60px;
   white-space: nowrap;
@@ -75,7 +76,7 @@
 .term-output {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 16px 8px;
+  padding: 16px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
   font-family: var(--font-mono);
@@ -83,16 +84,11 @@
   line-height: 1.55;
   color: #e4e4e7;
   -webkit-overflow-scrolling: touch;
+  min-height: 0;
 }
 
-.term-output::-webkit-scrollbar {
-  width: 6px;
-}
-
-.term-output::-webkit-scrollbar-track {
-  background: transparent;
-}
-
+.term-output::-webkit-scrollbar { width: 6px; }
+.term-output::-webkit-scrollbar-track { background: transparent; }
 .term-output::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 3px;
@@ -105,20 +101,36 @@
 }
 
 /* ═══════════════════════════════════════════
+   BRAND (логотип)
+   ═══════════════════════════════════════════ */
+
+.term-brand {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: var(--font-head);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  line-height: 1.2;
+}
+
+.term-brand-name { color: #fafafa; }
+.term-brand-accent { color: #e10600; }
+
+/* ═══════════════════════════════════════════
    BOOT + HINT
    ═══════════════════════════════════════════ */
 
 .term-boot {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.45;
   color: rgba(255, 255, 255, 0.4);
+  font-family: var(--font-mono);
 }
 
-.term-boot > div {
-  margin: 0;
-  padding: 0;
-}
+.term-boot > div { margin: 0; padding: 0; }
 
 .term-boot .ok {
   color: #28c840;
@@ -130,6 +142,7 @@
   color: rgba(255, 255, 255, 0.35);
   font-size: 12px;
   margin-bottom: 4px;
+  font-family: var(--font-mono);
 }
 
 /* ═══════════════════════════════════════════
@@ -149,9 +162,7 @@
   font-size: 13px;
 }
 
-.term-cmd {
-  color: #e4e4e7;
-}
+.term-cmd { color: #e4e4e7; }
 
 /* ═══════════════════════════════════════════
    INPUT LINE
@@ -181,9 +192,7 @@
   min-width: 0;
 }
 
-.term-input::placeholder {
-  color: rgba(255, 255, 255, 0.25);
-}
+.term-input::placeholder { color: rgba(255, 255, 255, 0.25); }
 
 /* ═══════════════════════════════════════════
    AUTOCOMPLETE
@@ -209,9 +218,7 @@
   display: none;
 }
 
-.term-autocomplete.visible {
-  display: block;
-}
+.term-autocomplete.visible { display: block; }
 
 .term-autocomplete-item {
   padding: 6px 12px;
@@ -229,18 +236,11 @@
   color: #e4e4e7;
 }
 
-.term-autocomplete-value {
-  color: #60a5fa;
-  font-weight: 600;
-}
-
-.term-autocomplete-hint {
-  color: rgba(255, 255, 255, 0.35);
-  font-size: 11px;
-}
+.term-autocomplete-value { color: #60a5fa; font-weight: 600; }
+.term-autocomplete-hint { color: rgba(255, 255, 255, 0.35); font-size: 11px; }
 
 /* ═══════════════════════════════════════════
-   KEYPAD (компактный)
+   KEYPAD (вне окна, компактный)
    ═══════════════════════════════════════════ */
 
 .keypad {
@@ -248,24 +248,27 @@
   backdrop-filter: blur(30px);
   -webkit-backdrop-filter: blur(30px);
   border-top: 1px solid rgba(255, 255, 255, 0.05);
-  padding: 6px;
+  border-radius: 12px 12px 0 0;
+  padding: 6px 8px;
+  padding-bottom: max(6px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 4px;
   flex-shrink: 0;
-  padding-bottom: max(6px, env(safe-area-inset-bottom));
+  margin: 0 -8px;
 }
 
 .keypad-row {
   display: flex;
   gap: 4px;
   justify-content: stretch;
+  flex-shrink: 0;
 }
 
 .keypad-btn {
   flex: 1;
   min-width: 0;
-  height: 32px;
+  height: 36px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
@@ -277,7 +280,6 @@
   transition: all 0.12s ease;
   user-select: none;
   -webkit-user-select: none;
-  -webkit-tap-highlight-color: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -315,9 +317,7 @@
 .output-box.warn { border-left-color: #f97316; }
 .output-box.info { border-left-color: #60a5fa; }
 
-.kv-block {
-  margin: 6px 0;
-}
+.kv-block { margin: 6px 0; }
 
 .kv-row {
   display: flex;
@@ -327,17 +327,8 @@
   line-height: 1.6;
 }
 
-.kv-key {
-  color: rgba(255, 255, 255, 0.4);
-  min-width: 110px;
-  flex-shrink: 0;
-}
-
-.kv-val {
-  color: #e4e4e7;
-  word-break: break-word;
-}
-
+.kv-key { color: rgba(255, 255, 255, 0.4); min-width: 110px; flex-shrink: 0; }
+.kv-val { color: #e4e4e7; word-break: break-word; }
 .kv-val.green { color: #28c840; }
 .kv-val.red { color: #ef4444; }
 .kv-val.yellow { color: #fbbf24; }
@@ -367,9 +358,7 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.term-table tr:last-child td {
-  border-bottom: none;
-}
+.term-table tr:last-child td { border-bottom: none; }
 
 .json-block {
   background: rgba(0, 0, 0, 0.3);
@@ -411,9 +400,7 @@
   justify-content: center;
 }
 
-.history-modal-overlay.visible {
-  display: flex;
-}
+.history-modal-overlay.visible { display: flex; }
 
 .history-modal {
   background: rgba(28, 28, 30, 0.98);
@@ -491,11 +478,12 @@
 
 .design-credit {
   text-align: center;
-  padding: 6px 0 8px;
+  padding: 8px 0 10px;
   font-family: var(--font-body);
   font-size: 10px;
-  letter-spacing: 0.5px;
-  color: rgba(255, 255, 255, 0.25);
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.2);
   background: transparent;
   flex-shrink: 0;
-     } 
+  text-transform: uppercase;
+}
