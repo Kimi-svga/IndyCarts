@@ -14,11 +14,14 @@ import { parse } from './parser';
 import { Keypad, type KeypadAction } from './keypad';
 import { HistoryModal } from './history-modal';
 
+/** Базовый контекст без args/flags/input. */
+export type TerminalContext = Omit<CommandContext, 'args' | 'flags' | 'input'>;
+
 export interface TerminalOptions {
   prompt?: string;
   greeting?: string;
   onCommand?: (command: string) => void;
-  context?: Omit<CommandContext, 'args' | 'flags' | 'input'>;
+  context?: TerminalContext;
 }
 
 export class Terminal {
@@ -28,10 +31,9 @@ export class Terminal {
   private completer: Completer;
   private executor: Executor;
 
-  private outputEl: HTMLElement;
   private inputEl: HTMLInputElement;
+  private outputEl: HTMLElement;
   private autocompleteEl: HTMLElement;
-  private keypad: Keypad;
   private historyModal: HistoryModal;
 
   private currentCompletions: Array<{ value: string; hint?: string }> = [];
@@ -43,7 +45,7 @@ export class Terminal {
     this.completer = new Completer(this.registry);
     this.executor = new Executor(this.registry);
 
-    // ─── Input ───
+    // Input
     this.inputEl = document.createElement('input');
     this.inputEl.type = 'text';
     this.inputEl.className = 'term-input';
@@ -54,34 +56,33 @@ export class Terminal {
     this.inputEl.setAttribute('inputmode', 'text');
     this.inputEl.placeholder = 'введи help...';
 
-    // ─── Output ───
+    // Output
     this.outputEl = document.createElement('div');
     this.outputEl.className = 'term-output';
 
-    // ─── Autocomplete ───
+    // Autocomplete
     this.autocompleteEl = document.createElement('div');
     this.autocompleteEl.className = 'term-autocomplete';
 
-    // ─── Render ───
+    // Render
     this.render();
-    this.attachEvents();
 
-    // ─── Keypad ───
-    this.keypad = new Keypad(
-      this.container,
-      this.handleKeypadAction.bind(this),
-    );
-
-    // ─── History Modal ───
+    // History Modal — до attachEvents (callback использует его)
     this.historyModal = new HistoryModal(
       this.container,
-      (command) => {
+      (command: string) => {
         this.inputEl.value = command;
         this.inputEl.focus();
       },
     );
 
-    // ─── Greeting + Focus ───
+    // Keypad — локальная, не нужно поле
+    new Keypad(this.container, this.handleKeypadAction.bind(this));
+
+    // Events
+    this.attachEvents();
+
+    // Greeting + Focus
     this.printGreeting();
     this.inputEl.focus();
   }
@@ -117,7 +118,7 @@ export class Terminal {
     const pipeline = parse(trimmed);
     if (pipeline.length === 0) return;
 
-    const ctx = this.options.context ?? {
+    const ctx: TerminalContext = this.options.context ?? {
       repo: createDummyRepo(),
       print: (html: string) => this.print(html),
       user: { telegramId: 0, username: 'root', role: 'owner' as const },
@@ -256,10 +257,9 @@ export class Terminal {
     const value = input.value;
 
     switch (key) {
-      case 'a': {
+      case 'a':
         input.setSelectionRange(0, 0);
         break;
-      }
 
       case 'e': {
         const len = value.length;
@@ -267,17 +267,15 @@ export class Terminal {
         break;
       }
 
-      case 'u': {
+      case 'u':
         input.value = value.slice(end);
         input.setSelectionRange(0, 0);
         break;
-      }
 
-      case 'k': {
+      case 'k':
         input.value = value.slice(0, start);
         input.setSelectionRange(start, start);
         break;
-      }
 
       case 'w': {
         const before = value.slice(0, start);
@@ -290,15 +288,13 @@ export class Terminal {
         break;
       }
 
-      case 'l': {
+      case 'l':
         this.clear();
         break;
-      }
 
-      case 'r': {
+      case 'r':
         this.historyModal.open(this.history.all());
         break;
-      }
     }
   }
 
@@ -392,24 +388,24 @@ export class Terminal {
 }
 
 // ═══════════════════════════════════════════
-// DUMMY REPO (если контекст не передан)
+// DUMMY REPO
 // ═══════════════════════════════════════════
 
 function createDummyRepo(): CommandContext['repo'] {
   return {
     users: {
-      find: async () => null,
-      search: async () => [],
+      find: async (_username: string) => null,
+      search: async (_query: string) => [],
       list: async () => [],
-      ban: async () => {},
-      unban: async () => {},
-      setBalance: async () => {},
+      ban: async (_userId: number, _duration: string, _reason: string) => {},
+      unban: async (_userId: number) => {},
+      setBalance: async (_userId: number, _amount: number) => {},
     },
     cards: {
       list: async () => [],
-      find: async () => null,
-      give: async () => {},
-      setPrice: async () => {},
+      find: async (_id: number) => null,
+      give: async (_userId: number, _cardId: number) => {},
+      setPrice: async (_cardId: number, _price: number) => {},
     },
   };
-  } 
+                                          } 
