@@ -67,7 +67,7 @@ export class Terminal {
     // Render
     this.render();
 
-    // History Modal — до attachEvents (callback использует его)
+    // History Modal — до attachEvents
     this.historyModal = new HistoryModal(
       this.container,
       (command: string) => {
@@ -76,7 +76,7 @@ export class Terminal {
       },
     );
 
-    // Keypad — локальная, не нужно поле
+    // Keypad — локальная
     new Keypad(this.container, this.handleKeypadAction.bind(this));
 
     // Events
@@ -90,6 +90,11 @@ export class Terminal {
   /** Регистрация команд. */
   register(...commands: Command[]): void {
     this.registry.registerAll(commands);
+  }
+
+  /** Публичный доступ к реестру (для help). */
+  getRegistry(): Registry {
+    return this.registry;
   }
 
   /** Вывод HTML. */
@@ -408,4 +413,4 @@ function createDummyRepo(): CommandContext['repo'] {
       setPrice: async (_cardId: number, _price: number) => {},
     },
   };
-                                          } 
+}
