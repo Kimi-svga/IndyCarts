@@ -1,9 +1,9 @@
 /**
  * Ядро терминала Visual Merge.
- * Ввод, вывод, история, автодополнение.
+ * Ввод, вывод, история, автодополнение, keypad для мобильных.
  */
 
-import type { Command } from '@/types/command';
+import type { Command, CommandContext } from '@/types/command';
 import { Registry } from './registry';
 import { Renderer } from './renderer';
 import { History } from './history';
@@ -11,11 +11,14 @@ import { Completer } from './completer';
 import { Keybindings } from './keybindings';
 import { Executor } from './executor';
 import { parse } from './parser';
+import { Keypad, type KeypadAction } from './keypad';
+import { HistoryModal } from './history-modal';
 
 export interface TerminalOptions {
   prompt?: string;
   greeting?: string;
   onCommand?: (command: string) => void;
+  context?: Omit<CommandContext, 'args' | 'flags' | 'input'>;
 }
 
 export class Terminal {
@@ -27,9 +30,10 @@ export class Terminal {
 
   private outputEl: HTMLElement;
   private inputEl: HTMLInputElement;
-  private autocompleteEl: HTMLElement | null = null;
+  private autocompleteEl: HTMLElement;
+  private keypad: Keypad;
+  private historyModal: HistoryModal;
 
-  private currentCompletionIndex = 0;
   private currentCompletions: Array<{ value: string; hint?: string }> = [];
 
   constructor(
@@ -39,6 +43,7 @@ export class Terminal {
     this.completer = new Completer(this.registry);
     this.executor = new Executor(this.registry);
 
+    // Создаём элементы
     this.outputEl = document.createElement('div');
     this.outputEl.className = 'term-output';
 
@@ -51,9 +56,29 @@ export class Terminal {
     this.inputEl.spellcheck = false;
     this.inputEl.placeholder = 'введи help...';
 
+    this.autocompleteEl = document.createElement('div');
+    this.autocompleteEl.className = 'term-autocomplete';
+
     this.render();
     this.attachEvents();
+
+    // Keypad — панель кнопок внизу
+    this.keypad = new Keypad(
+      this.container,
+      this.handleKeypadAction.bind(this),
+    );
+
+    // History modal
+    this.historyModal = new HistoryModal(
+      this.container,
+      (command) => {
+        this.inputEl.value = command;
+        this.inputEl.focus();
+      },
+    );
+
     this.printGreeting();
+    this.inputEl.focus();
   }
 
   /** Регистрация команд. */
@@ -61,15 +86,16 @@ export class Terminal {
     this.registry.registerAll(commands);
   }
 
-  /** Вывод строки. */
+  /** Вывод HTML. */
   print(html: string): void {
     const div = document.createElement('div');
+    div.className = 'term-line';
     div.innerHTML = html;
     this.outputEl.appendChild(div);
     this.scrollToBottom();
   }
 
-  /** Очистить. */
+  /** Очистить экран. */
   clear(): void {
     this.outputEl.innerHTML = '';
   }
@@ -85,23 +111,29 @@ export class Terminal {
 
     const pipeline = parse(trimmed);
 
-    const result = await this.executor.execute(pipeline, {
-      repo: this.createDummyRepo(),
-      print: (html) => this.print(html),
-      user: {
-        telegramId: 0,
-        username: 'root',
-        role: 'owner',
-      },
-    });
+    if (pipeline.length === 0) return;
 
+    const ctx = this.options.context ?? {
+      repo: createDummyRepo(),
+      print: (html: string) => this.print(html),
+      user: { telegramId: 0, username: 'root', role: 'owner' },
+    };
+
+    const result = await this.executor.execute(pipeline, ctx);
     const html = this.renderer.render(result);
     if (html) this.print(html);
   }
 
+  /** Фокус на input. */
+  focus(): void {
+    this.inputEl.focus();
+  }
+
+  // ─── PRIVATE ───
+
   private render(): void {
     this.container.innerHTML = '';
-    this.container.className = 'terminal';
+    this.container.classList.add('terminal');
 
     const inputLine = document.createElement('div');
     inputLine.className = 'term-input-line';
@@ -112,20 +144,17 @@ export class Terminal {
 
     inputLine.appendChild(prompt);
     inputLine.appendChild(this.inputEl);
+    inputLine.appendChild(this.autocompleteEl);
 
     this.container.appendChild(this.outputEl);
     this.container.appendChild(inputLine);
-
-    this.autocompleteEl = document.createElement('div');
-    this.autocompleteEl.className = 'term-autocomplete';
-    inputLine.appendChild(this.autocompleteEl);
   }
 
   private attachEvents(): void {
     this.inputEl.addEventListener('keydown', (e) => this.handleKey(e));
 
     const kb = new Keybindings(this.inputEl, {
-      onCtrlR: () => this.openHistoryModal(),
+      onCtrlR: () => this.historyModal.open(this.history.all()),
       onCtrlL: () => this.clear(),
       onTab: () => this.applyAutocomplete(),
       onEscape: () => this.hideAutocomplete(),
@@ -163,6 +192,55 @@ export class Terminal {
     }
   }
 
+  private handleKeypadAction(action: KeypadAction): void {
+    switch (action.type) {
+      case 'history-prev': {
+        const prev = this.history.prev(this.inputEl.value);
+        if (prev !== null) this.inputEl.value = prev;
+        this.inputEl.focus();
+        break;
+      }
+      case 'history-next': {
+        const next = this.history.next();
+        if (next !== null) this.inputEl.value = next;
+        this.inputEl.focus();
+        break;
+      }
+      case 'tab':
+        this.applyAutocomplete();
+        this.inputEl.focus();
+        break;
+      case 'esc':
+        this.hideAutocomplete();
+        this.inputEl.value = '';
+        this.inputEl.focus();
+        break;
+      case 'ctrl':
+        // Ctrl — модификатор, обрабатывается в keypad
+        break;
+      case 'char':
+        this.insertChar(action.value);
+        this.inputEl.focus();
+        break;
+      case 'history':
+        this.historyModal.open(this.history.all());
+        break;
+      case 'clear':
+        this.clear();
+        this.inputEl.focus();
+        break;
+    }
+  }
+
+  private insertChar(char: string): void {
+    const start = this.inputEl.selectionStart ?? this.inputEl.value.length;
+    const end = this.inputEl.selectionEnd ?? this.inputEl.value.length;
+    const value = this.inputEl.value;
+
+    this.inputEl.value = value.slice(0, start) + char + value.slice(end);
+    this.inputEl.setSelectionRange(start + char.length, start + char.length);
+  }
+
   private updateAutocomplete(): void {
     const completions = this.completer.complete(this.inputEl.value);
 
@@ -172,9 +250,6 @@ export class Terminal {
     }
 
     this.currentCompletions = completions;
-    this.currentCompletionIndex = 0;
-
-    if (!this.autocompleteEl) return;
 
     this.autocompleteEl.innerHTML = completions
       .map(
@@ -189,16 +264,18 @@ export class Terminal {
 
     this.autocompleteEl.classList.add('visible');
 
-    this.autocompleteEl.querySelectorAll('.term-autocomplete-item').forEach((el) => {
-      el.addEventListener('click', () => {
-        const idx = parseInt((el as HTMLElement).dataset.index || '0', 10);
-        this.applyCompletion(idx);
+    this.autocompleteEl
+      .querySelectorAll('.term-autocomplete-item')
+      .forEach((el) => {
+        el.addEventListener('click', () => {
+          const idx = parseInt((el as HTMLElement).dataset.index || '0', 10);
+          this.applyCompletion(idx);
+        });
       });
-    });
   }
 
   private hideAutocomplete(): void {
-    this.autocompleteEl?.classList.remove('visible');
+    this.autocompleteEl.classList.remove('visible');
     this.currentCompletions = [];
   }
 
@@ -218,7 +295,9 @@ export class Terminal {
 
   private printPrompt(command: string): void {
     const prompt = this.options.prompt ?? 'root@indycarts:~#';
-    this.print(`<span class="term-prompt-inline">${prompt}</span> <span class="term-cmd">${this.escapeHtml(command)}</span>`);
+    this.print(
+      `<span class="term-prompt-inline">${prompt}</span> <span class="term-cmd">${this.escapeHtml(command)}</span>`,
+    );
   }
 
   private printGreeting(): void {
@@ -232,33 +311,29 @@ export class Terminal {
   }
 
   private escapeHtml(text: string): string {
-    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
+}
 
-  private openHistoryModal(): void {
-    const items = this.history.search('');
-    this.print(`<div class="term-history-hint">История (${items.length}):</div>`);
-    for (const item of items.slice(-10)) {
-      this.print(`<div class="term-history-item">${this.escapeHtml(item)}</div>`);
-    }
-  }
-
-  private createDummyRepo(): any {
-    return {
-      users: {
-        find: async () => null,
-        search: async () => [],
-        list: async () => [],
-        ban: async () => {},
-        unban: async () => {},
-        setBalance: async () => {},
-      },
-      cards: {
-        list: async () => [],
-        find: async () => null,
-        give: async () => {},
-        setPrice: async () => {},
-      },
-    };
-  }
-} 
+/** Dummy-репозиторий, если контекст не передан. */
+function createDummyRepo(): CommandContext['repo'] {
+  return {
+    users: {
+      find: async () => null,
+      search: async () => [],
+      list: async () => [],
+      ban: async () => {},
+      unban: async () => {},
+      setBalance: async () => {},
+    },
+    cards: {
+      list: async () => [],
+      find: async () => null,
+      give: async () => {},
+      setPrice: async () => {},
+    },
+  };
+  } 
