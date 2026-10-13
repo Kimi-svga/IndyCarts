@@ -11,7 +11,6 @@ import { Completer } from './completer';
 import { Keybindings } from './keybindings';
 import { Executor } from './executor';
 import { parse } from './parser';
-import { Result } from '@/types/result';
 
 export interface TerminalOptions {
   prompt?: string;
