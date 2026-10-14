@@ -20,6 +20,9 @@ import { renderProfile } from '@/ui/screens/profile';
 import { renderCollection } from '@/ui/screens/collection';
 import { renderDrop } from '@/ui/screens/drop';
 import { renderMarket } from '@/ui/screens/market';
+import { renderPvp } from '@/ui/screens/pvp';
+import { renderBank } from '@/ui/screens/bank';
+import { renderShop } from '@/ui/screens/shop';
 import { renderTerminal } from '@/ui/screens/terminal';
 
 interface MeData {
@@ -70,7 +73,6 @@ credit.className = 'design-credit';
 credit.textContent = 'Design by Expo';
 app.appendChild(credit);
 
-// ─── Роуты ───
 router.register('menu', (el) => {
   const menuData = meData
     ? {
@@ -98,9 +100,24 @@ router.register('drop', (el) => {
   updateBottomNav('drop');
 });
 
-router.register('market', (el) => {
-  renderMarket(el);
+router.register('market', async (el) => {
+  await renderMarket(el);
   updateBottomNav('market');
+});
+
+router.register('pvp', async (el) => {
+  await renderPvp(el);
+  updateBottomNav(null);
+});
+
+router.register('bank', async (el) => {
+  await renderBank(el);
+  updateBottomNav(null);
+});
+
+router.register('shop', async (el) => {
+  await renderShop(el);
+  updateBottomNav(null);
 });
 
 router.register('terminal', (el) => {
@@ -108,7 +125,6 @@ router.register('terminal', (el) => {
   updateBottomNav(null);
 });
 
-// ─── Auth + стартовый экран ───
 (async () => {
   const authResult = await authenticate();
 
@@ -139,9 +155,8 @@ router.register('terminal', (el) => {
   await router.navigate('menu');
 })();
 
-// Обновление bottom-nav при навигации
 const originalNavigate = router.navigate.bind(router);
 router.navigate = async (name) => {
   await originalNavigate(name);
   updateBottomNav(name);
-};
+}; 
