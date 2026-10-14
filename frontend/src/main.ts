@@ -1,6 +1,5 @@
 /**
  * Visual Merge — точка входа.
- * Design by Expo
  */
 
 import './styles/global.css';
@@ -23,6 +22,9 @@ import { renderMarket } from '@/ui/screens/market';
 import { renderPvp } from '@/ui/screens/pvp';
 import { renderBank } from '@/ui/screens/bank';
 import { renderShop } from '@/ui/screens/shop';
+import { renderRating } from '@/ui/screens/rating';
+import { renderClan } from '@/ui/screens/clan';
+import { renderAuction } from '@/ui/screens/auction';
 import { renderTerminal } from '@/ui/screens/terminal';
 
 interface MeData {
@@ -77,11 +79,7 @@ app.appendChild(credit);
 
 router.register('menu', (el) => {
   const menuData = meData
-    ? {
-        username: meData.username,
-        balance: meData.balance,
-        pvpRating: meData.pvp_rating,
-      }
+    ? { username: meData.username, balance: meData.balance, pvpRating: meData.pvp_rating }
     : null;
   renderMenu(el, router, menuData);
   updateBottomNav('menu');
@@ -122,42 +120,27 @@ router.register('shop', async (el) => {
   updateBottomNav(null);
 });
 
+router.register('rating', async (el) => {
+  await renderRating(el);
+  updateBottomNav(null);
+});
+
+router.register('clan', async (el) => {
+  await renderClan(el);
+  updateBottomNav(null);
+});
+
+router.register('auction', async (el) => {
+  await renderAuction(el);
+  updateBottomNav(null);
+});
+
 router.register('terminal', (el) => {
   renderTerminal(el);
   updateBottomNav(null);
 });
 
 // ─── Заглушки ───
-
-router.register('auction', (el) => {
-  el.innerHTML = `
-    <div class="empty-state">
-      <iconify-icon icon="lucide:target" width="64" height="64"></iconify-icon>
-      <div class="empty-text">АУКЦИОН</div>
-      <div class="empty-sub">Скоро</div>
-    </div>
-  `;
-});
-
-router.register('clan', (el) => {
-  el.innerHTML = `
-    <div class="empty-state">
-      <iconify-icon icon="lucide:shield" width="64" height="64"></iconify-icon>
-      <div class="empty-text">КЛАНЫ</div>
-      <div class="empty-sub">Скоро</div>
-    </div>
-  `;
-});
-
-router.register('rating', (el) => {
-  el.innerHTML = `
-    <div class="empty-state">
-      <iconify-icon icon="lucide:trophy" width="64" height="64"></iconify-icon>
-      <div class="empty-text">РЕЙТИНГ</div>
-      <div class="empty-sub">Скоро</div>
-    </div>
-  `;
-});
 
 router.register('ref', (el) => {
   el.innerHTML = `
@@ -179,7 +162,7 @@ router.register('plus', (el) => {
   `;
 });
 
-// ─── Auth + стартовый экран ───
+// ─── Auth ───
 
 (async () => {
   const authResult = await authenticate();
@@ -210,8 +193,6 @@ router.register('plus', (el) => {
 
   await router.navigate('menu');
 })();
-
-// ─── Обновление bottom-nav ───
 
 const originalNavigate = router.navigate.bind(router);
 router.navigate = async (name) => {
