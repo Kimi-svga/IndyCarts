@@ -15,14 +15,14 @@ const ITEMS: MenuItem[] = [
   { screen: 'collection', icon: 'lucide:layers', label: 'Карты' },
   { screen: 'drop', icon: 'lucide:gift', label: 'Дроп' },
   { screen: 'market', icon: 'lucide:trending-up', label: 'Биржа' },
-  { screen: 'market', icon: 'lucide:target', label: 'Аукцион' },
-  { screen: 'market', icon: 'lucide:shopping-cart', label: 'Магазин' },
-  { screen: 'menu', icon: 'lucide:swords', label: 'PvP' },
-  { screen: 'menu', icon: 'lucide:landmark', label: 'Банк' },
-  { screen: 'menu', icon: 'lucide:shield', label: 'Кланы' },
-  { screen: 'menu', icon: 'lucide:trophy', label: 'Рейтинг' },
-  { screen: 'menu', icon: 'lucide:users', label: 'Рефералка' },
-  { screen: 'menu', icon: 'lucide:gem', label: 'Indy+' },
+  { screen: 'auction', icon: 'lucide:target', label: 'Аукцион' },
+  { screen: 'shop', icon: 'lucide:shopping-cart', label: 'Магазин' },
+  { screen: 'pvp', icon: 'lucide:swords', label: 'PvP' },
+  { screen: 'bank', icon: 'lucide:landmark', label: 'Банк' },
+  { screen: 'clan', icon: 'lucide:shield', label: 'Кланы' },
+  { screen: 'rating', icon: 'lucide:trophy', label: 'Рейтинг' },
+  { screen: 'ref', icon: 'lucide:users', label: 'Рефералка' },
+  { screen: 'plus', icon: 'lucide:gem', label: 'Indy+' },
 ];
 
 export function renderMenu(
