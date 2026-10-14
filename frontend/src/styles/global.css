@@ -1,29 +1,36 @@
 /**
  * Visual Merge — глобальные стили.
  * IndyCar Paddock · Design by Expo
+ *
+ * Всё через CSS-переменные.
+ * app.css, terminal.css, settings.css — используют var().
  */
 
+/* ═══════════════════════════════════════════
+   ПЕРЕМЕННЫЕ — ТЁМНАЯ ТЕМА (по умолчанию)
+   ═══════════════════════════════════════════ */
+
 :root {
-  /* Акцент — управляется настройками */
+  /* ─── Акцент — управляется настройками ─── */
   --accent: #e10600;
   --accent-hover: #ff1801;
   --accent-soft: rgba(225, 6, 0, 0.15);
 
-  /* Фон — управляется настройками */
+  /* ─── Фон — управляется настройками ─── */
   --bg: #0a0a0a;
   --bg-2: #141416;
   --bg-3: #1a1a1c;
 
-  /* Текст */
+  /* ─── Текст ─── */
   --text: #fafafa;
   --text-dim: #a0a0a0;
   --text-mute: #666;
 
-  /* Границы */
+  /* ─── Границы ─── */
   --line: #262626;
   --line-2: #333;
 
-  /* Редкости */
+  /* ─── Редкости (не зависят от accent) ─── */
   --gold: #d4a017;
   --green: #28c840;
   --blue: #3b82f6;
@@ -32,48 +39,54 @@
   --yellow: #fbbf24;
   --red: #ef4444;
 
-  /* Отступы — управляются настройками */
+  /* ─── Отступы — управляются настройками ─── */
   --space: 16px;
   --space-sm: 8px;
   --space-lg: 24px;
 
-  /* Радиусы — управляются настройками */
+  /* ─── Радиусы — управляются настройками ─── */
   --radius: 10px;
   --radius-sm: 6px;
   --radius-lg: 16px;
 
-  /* Шрифты */
+  /* ─── Шрифты ─── */
   --font-head: 'Unbounded', sans-serif;
   --font-body: 'Onest', sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Monaco, monospace;
   --font-size-base: 15px;
 
+  /* ─── Анимации ─── */
   --transition: 0.15s ease;
+
+  /* ─── Терминал (всегда тёмный) ─── */
+  --term-bg: #1c1c1e;
+  --term-prompt: #28c840;
+  --term-text: #e4e4e7;
+  --term-dim: rgba(255, 255, 255, 0.35);
 }
 
-/* ─── Светлая тема ─── */
+/* ═══════════════════════════════════════════
+   СВЕТЛАЯ ТЕМА
+   ═══════════════════════════════════════════ */
 
 [data-theme="light"] {
+  color-scheme: light;
+
   --bg: #fafafa;
   --bg-2: #ffffff;
   --bg-3: #f0f0f0;
+
   --text: #0a0a0a;
   --text-dim: #555;
   --text-mute: #999;
+
   --line: #e5e5e5;
   --line-2: #d0d0d0;
 }
 
-[data-theme="light"] .app-header,
-[data-theme="light"] .app-bottom-nav {
-  background: rgba(250, 250, 250, 0.85);
-}
-
-[data-theme="light"] .menu-item,
-[data-theme="light"] .info-card,
-[data-theme="light"] .card-item {
-  background: rgba(0, 0, 0, 0.02);
-}
+/* ═══════════════════════════════════════════
+   БАЗА
+   ═══════════════════════════════════════════ */
 
 * {
   margin: 0;
@@ -82,11 +95,20 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-html, body {
+html,
+body {
   background: var(--bg);
   background-image:
-    radial-gradient(ellipse at top, color-mix(in srgb, var(--accent) 6%, transparent) 0%, transparent 50%),
-    radial-gradient(ellipse at bottom, rgba(59, 130, 246, 0.04) 0%, transparent 50%);
+    radial-gradient(
+      ellipse at top,
+      color-mix(in srgb, var(--accent) 6%, transparent) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse at bottom,
+      rgba(59, 130, 246, 0.04) 0%,
+      transparent 50%
+    );
   color: var(--text);
   font-family: var(--font-body);
   font-size: var(--font-size-base);
@@ -116,10 +138,87 @@ iconify-icon {
   vertical-align: middle;
 }
 
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
+/* ═══════════════════════════════════════════
+   СКРОЛЛБАР
+   ═══════════════════════════════════════════ */
 
-[data-theme="light"] ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text) 15%, transparent);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text) 25%, transparent);
+}
+
+/* ═══════════════════════════════════════════
+   ССЫЛКИ
+   ═══════════════════════════════════════════ */
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:active {
+  color: var(--accent-hover);
+}
+
+/* ═══════════════════════════════════════════
+   ВЫДЕЛЕНИЕ
+   ═══════════════════════════════════════════ */
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+/* ═══════════════════════════════════════════
+   DESIGN CREDIT
+   ═══════════════════════════════════════════ */
+
+.design-credit {
+  text-align: center;
+  padding: 8px 0 10px;
+  font-family: var(--font-body);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--text-mute);
+  background: transparent;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+/* ═══════════════════════════════════════════
+   ОТКЛЮЧЕНИЕ АНИМАЦИЙ
+   ═══════════════════════════════════════════ */
+
+html[data-animations="off"] *,
+html[data-animations="off"] *::before,
+html[data-animations="off"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* ═══════════════════════════════════════════
+   UTILITY
+   ═══════════════════════════════════════════ */
+
+.hidden {
+  display: none !important;
+}
+
+.no-scroll {
+  overflow: hidden !important;
   } 
