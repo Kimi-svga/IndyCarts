@@ -1,8 +1,9 @@
 /**
- * Header с логотипом + иконка админки.
+ * Header — логотип + шестерёнка настроек + терминал.
  */
 
 import type { Router } from '../router';
+import { SettingsModal } from '@/settings/modal';
 
 export function createHeader(router: Router): HTMLElement {
   const header = document.createElement('div');
@@ -12,10 +13,21 @@ export function createHeader(router: Router): HTMLElement {
     <div class="app-header-title">
       VISUAL <span>MERGE</span>
     </div>
+    <button class="app-header-btn" data-action="settings" title="Настройки">
+      <iconify-icon icon="lucide:settings" width="18" height="18"></iconify-icon>
+    </button>
     <button class="app-header-btn" data-action="terminal" title="Admin">
       <iconify-icon icon="lucide:terminal" width="18" height="18"></iconify-icon>
     </button>
   `;
+
+  const modal = new SettingsModal();
+
+  header
+    .querySelector('[data-action="settings"]')
+    ?.addEventListener('click', () => {
+      modal.open();
+    });
 
   header
     .querySelector('[data-action="terminal"]')
@@ -24,4 +36,4 @@ export function createHeader(router: Router): HTMLElement {
     });
 
   return header;
-} 
+      } 
