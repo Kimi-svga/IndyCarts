@@ -263,6 +263,75 @@ async def get_card_image(card_id: int):
 
 
 # ═════════════════════════════════════════════
+# DROP
+# ═════════════════════════════════════════════
+
+@router.post("/drop")
+async def drop_card(user: User = Depends(get_current_user)):
+    """Дропнуть карту (списывает 1 попытку)."""
+    from services.drop import Drop
+    from services.clan import get_clan_bonuses, get_user_clan
+
+    async with AsyncSessionLocal() as session:
+        user_row = await session.get(User, user.id)
+        if user_row is None:
+            raise HTTPException(404, "User not found")
+
+        if user_row.daily_attempts <= 0:
+            raise HTTPException(400, "Попытки закончились")
+
+        clan, _ = await get_user_clan(session, user_row.id)
+        bonuses = get_clan_bonuses(clan.level) if clan else None
+        drop_bonus = bonuses.drop_bonus if bonuses else 0.0
+
+        card, is_iw = await Drop.drop_card_with_bonus(session, drop_bonus)
+
+        if card is None:
+            raise HTTPException(500, "Нет карт в базе")
+
+        serial = None
+        if card.max_supply is not None:
+            card.issued += 1
+            serial = card.issued
+
+        session.add(UserCard(
+            user_id=user_row.id,
+            card_id=card.id,
+            is_iw=is_iw,
+            acquired_price=card.current_price,
+            serial_number=serial,
+        ))
+        user_row.daily_attempts -= 1
+
+        bonus_money = 0
+        if bonuses and bonuses.money_bonus > 0:
+            bonus_money = int(10 * (1 + bonuses.money_bonus))
+            user_row.balance += bonus_money
+
+        await session.commit()
+
+        return {
+            "ok": True,
+            "card": {
+                "id": card.id,
+                "name": card.name,
+                "rarity": card.rarity,
+                "team": card.team,
+                "year": card.year,
+                "price": card.current_price,
+                "image_url": f"/api/cards/{card.id}/image" if card.image_file_id else None,
+                "max_supply": card.max_supply,
+                "issued": card.issued,
+            },
+            "is_iw": is_iw,
+            "serial": serial,
+            "bonus_money": bonus_money,
+            "attempts_left": user_row.daily_attempts,
+            "new_balance": user_row.balance,
+        }
+
+
+# ═════════════════════════════════════════════
 # CARD ACTIONS
 # ═════════════════════════════════════════════
 
