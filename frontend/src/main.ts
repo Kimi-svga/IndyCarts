@@ -73,6 +73,8 @@ credit.className = 'design-credit';
 credit.textContent = 'Design by Expo';
 app.appendChild(credit);
 
+// ─── Роуты ───
+
 router.register('menu', (el) => {
   const menuData = meData
     ? {
@@ -125,6 +127,60 @@ router.register('terminal', (el) => {
   updateBottomNav(null);
 });
 
+// ─── Заглушки ───
+
+router.register('auction', (el) => {
+  el.innerHTML = `
+    <div class="empty-state">
+      <iconify-icon icon="lucide:target" width="64" height="64"></iconify-icon>
+      <div class="empty-text">АУКЦИОН</div>
+      <div class="empty-sub">Скоро</div>
+    </div>
+  `;
+});
+
+router.register('clan', (el) => {
+  el.innerHTML = `
+    <div class="empty-state">
+      <iconify-icon icon="lucide:shield" width="64" height="64"></iconify-icon>
+      <div class="empty-text">КЛАНЫ</div>
+      <div class="empty-sub">Скоро</div>
+    </div>
+  `;
+});
+
+router.register('rating', (el) => {
+  el.innerHTML = `
+    <div class="empty-state">
+      <iconify-icon icon="lucide:trophy" width="64" height="64"></iconify-icon>
+      <div class="empty-text">РЕЙТИНГ</div>
+      <div class="empty-sub">Скоро</div>
+    </div>
+  `;
+});
+
+router.register('ref', (el) => {
+  el.innerHTML = `
+    <div class="empty-state">
+      <iconify-icon icon="lucide:users" width="64" height="64"></iconify-icon>
+      <div class="empty-text">РЕФЕРАЛКА</div>
+      <div class="empty-sub">Скоро</div>
+    </div>
+  `;
+});
+
+router.register('plus', (el) => {
+  el.innerHTML = `
+    <div class="empty-state">
+      <iconify-icon icon="lucide:gem" width="64" height="64"></iconify-icon>
+      <div class="empty-text">INDY+</div>
+      <div class="empty-sub">Открой бота → /plus</div>
+    </div>
+  `;
+});
+
+// ─── Auth + стартовый экран ───
+
 (async () => {
   const authResult = await authenticate();
 
@@ -154,6 +210,8 @@ router.register('terminal', (el) => {
 
   await router.navigate('menu');
 })();
+
+// ─── Обновление bottom-nav ───
 
 const originalNavigate = router.navigate.bind(router);
 router.navigate = async (name) => {
