@@ -8,14 +8,11 @@ import {
   applySettings,
   loadSettings,
   saveSettings,
-  type Accent,
-  type Animations,
-  type Background,
-  type Density,
-  type FontSize,
-  type Radius,
-  type Settings,
-  type Theme,
+} from './store';
+
+import type {
+  Accent,
+  Settings,
 } from './store';
 
 export class SettingsModal {
@@ -78,7 +75,7 @@ export class SettingsModal {
 
       <div class="setting-group">
         <div class="setting-label">Тема</div>
-        <div class="setting-options" data-key="theme">
+        <div class="setting-options">
           ${this.option('theme', 'system', 'Системная')}
           ${this.option('theme', 'dark', 'Тёмная')}
           ${this.option('theme', 'light', 'Светлая')}
@@ -100,7 +97,7 @@ export class SettingsModal {
 
       <div class="setting-group">
         <div class="setting-label">Размер шрифта</div>
-        <div class="setting-options" data-key="fontSize">
+        <div class="setting-options">
           ${this.option('fontSize', 'small', 'S')}
           ${this.option('fontSize', 'medium', 'M')}
           ${this.option('fontSize', 'large', 'L')}
@@ -109,7 +106,7 @@ export class SettingsModal {
 
       <div class="setting-group">
         <div class="setting-label">Плотность</div>
-        <div class="setting-options" data-key="density">
+        <div class="setting-options">
           ${this.option('density', 'compact', 'Компактно')}
           ${this.option('density', 'normal', 'Обычно')}
           ${this.option('density', 'spacious', 'Просторно')}
@@ -118,7 +115,7 @@ export class SettingsModal {
 
       <div class="setting-group">
         <div class="setting-label">Скругления</div>
-        <div class="setting-options" data-key="radius">
+        <div class="setting-options">
           ${this.option('radius', 'sharp', 'Острые')}
           ${this.option('radius', 'normal', 'Обычные')}
           ${this.option('radius', 'round', 'Круглые')}
@@ -127,7 +124,7 @@ export class SettingsModal {
 
       <div class="setting-group">
         <div class="setting-label">Анимации</div>
-        <div class="setting-options" data-key="animations">
+        <div class="setting-options">
           ${this.option('animations', 'on', 'Вкл')}
           ${this.option('animations', 'off', 'Выкл')}
         </div>
@@ -135,7 +132,7 @@ export class SettingsModal {
 
       <div class="setting-group">
         <div class="setting-label">Фон (тёмная тема)</div>
-        <div class="setting-options" data-key="background">
+        <div class="setting-options">
           ${this.option('background', 'asphalt', 'Асфальт')}
           ${this.option('background', 'coal', 'Уголь')}
           ${this.option('background', 'graphite', 'Графит')}
@@ -148,31 +145,34 @@ export class SettingsModal {
       </button>
     `;
 
-    // Кнопки
     this.content.querySelectorAll<HTMLElement>('.setting-option').forEach((btn) => {
       btn.addEventListener('click', () => {
         const key = btn.dataset.key as keyof Settings;
-        const value = btn.dataset.value as string;
-        this.set(key, value as never);
+        const value = btn.dataset.value;
+        if (key && value) {
+          this.set(key, value as never);
+        }
       });
     });
 
-    // Акценты
     this.content.querySelectorAll<HTMLElement>('.accent-dot').forEach((dot) => {
       dot.addEventListener('click', () => {
-        const accent = dot.dataset.accent as Accent;
-        this.set('accent', accent);
+        const accent = dot.dataset.accent;
+        if (accent) {
+          this.set('accent', accent as Accent);
+        }
       });
     });
 
-    // Сброс
-    document.getElementById('settings-reset')?.addEventListener('click', () => {
-      this.settings = { ...DEFAULT_SETTINGS };
-      saveSettings(this.settings);
-      applySettings(this.settings);
-      this.onUpdate(this.settings);
-      this.render();
-    });
+    this.content
+      .querySelector('#settings-reset')
+      ?.addEventListener('click', () => {
+        this.settings = { ...DEFAULT_SETTINGS };
+        saveSettings(this.settings);
+        applySettings(this.settings);
+        this.onUpdate(this.settings);
+        this.render();
+      });
   }
 
   private option(key: keyof Settings, value: string, label: string): string {
@@ -186,4 +186,4 @@ export class SettingsModal {
       </button>
     `;
   }
-}
+  } 
