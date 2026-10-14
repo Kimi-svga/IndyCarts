@@ -8,6 +8,14 @@ export type ScreenName =
   | 'collection'
   | 'drop'
   | 'market'
+  | 'pvp'
+  | 'bank'
+  | 'shop'
+  | 'auction'
+  | 'clan'
+  | 'rating'
+  | 'ref'
+  | 'plus'
   | 'terminal';
 
 type ScreenHandler = (container: HTMLElement) => void | Promise<void>;
@@ -48,4 +56,4 @@ export class Router {
   getCurrent(): ScreenName | null {
     return this.current;
   }
-}
+  } 
