@@ -1,5 +1,5 @@
 /**
- * Visual Merge — стили приложения (экраны).
+ * Visual Merge — стили приложения.
  * Design by Expo
  */
 
@@ -26,9 +26,7 @@
   color: #fafafa;
 }
 
-.app-header-title span {
-  color: #e10600;
-}
+.app-header-title span { color: #e10600; }
 
 .app-header-btn {
   position: relative;
@@ -70,9 +68,7 @@
   border: 2px solid #141416;
 }
 
-.app-header-badge.hidden {
-  display: none;
-}
+.app-header-badge.hidden { display: none; }
 
 .app-screen-container {
   flex: 1;
@@ -82,9 +78,7 @@
   -webkit-overflow-scrolling: touch;
 }
 
-.screen {
-  padding: 16px;
-}
+.screen { padding: 16px; }
 
 /* ═══ BOTTOM NAV ═══ */
 
@@ -114,9 +108,7 @@
   font-family: inherit;
 }
 
-.app-nav-item.active {
-  color: #e10600;
-}
+.app-nav-item.active { color: #e10600; }
 
 .app-nav-label {
   font-family: var(--font-head);
@@ -127,9 +119,7 @@
 
 /* ═══ MENU ═══ */
 
-.menu-top {
-  margin-bottom: 16px;
-}
+.menu-top { margin-bottom: 16px; }
 
 .menu-hero {
   text-align: center;
@@ -214,9 +204,7 @@
   transform: scale(0.97);
 }
 
-.menu-item iconify-icon {
-  color: #e10600;
-}
+.menu-item iconify-icon { color: #e10600; }
 
 .menu-label {
   font-family: var(--font-head);
@@ -256,13 +244,9 @@
   font-size: 14px;
 }
 
-.info-row:last-child {
-  border-bottom: none;
-}
+.info-row:last-child { border-bottom: none; }
 
-.info-row-label {
-  color: rgba(255, 255, 255, 0.5);
-}
+.info-row-label { color: rgba(255, 255, 255, 0.5); }
 
 .info-row-value {
   font-family: var(--font-mono);
@@ -294,9 +278,7 @@
   position: relative;
 }
 
-.card-item:active {
-  transform: scale(0.98);
-}
+.card-item:active { transform: scale(0.98); }
 
 .card-item.legendary { border-color: #fbbf24; }
 .card-item.limited { border-color: #ef4444; }
@@ -352,9 +334,7 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
-.card-info {
-  padding: 10px;
-}
+.card-info { padding: 10px; }
 
 .card-name {
   font-family: var(--font-head);
@@ -381,7 +361,7 @@
   color: #fafafa;
 }
 
-/* ═══ EMPTY STATE ═══ */
+/* ═══ EMPTY ═══ */
 
 .empty-state {
   display: flex;
@@ -401,10 +381,7 @@
   letter-spacing: 1px;
 }
 
-.empty-sub {
-  font-size: 13px;
-  font-family: var(--font-body);
-}
+.empty-sub { font-size: 13px; font-family: var(--font-body); }
 
 /* ═══ MODAL ═══ */
 
@@ -420,9 +397,7 @@
   justify-content: center;
 }
 
-.modal-overlay.visible {
-  display: flex;
-}
+.modal-overlay.visible { display: flex; }
 
 .modal {
   background: rgba(28, 28, 30, 0.98);
@@ -450,11 +425,7 @@
   margin: 0 auto 16px;
 }
 
-.modal-content {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
+.modal-content { display: flex; flex-direction: column; gap: 12px; }
 
 .modal-card-image {
   height: 280px;
@@ -477,7 +448,6 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
-  object-position: center;
   display: block;
 }
 
@@ -495,13 +465,9 @@
   gap: 12px;
   font-size: 13px;
   color: rgba(255, 255, 255, 0.5);
-  font-family: var(--font-body);
 }
 
-.modal-card-rarity {
-  color: #e10600;
-  font-weight: 600;
-}
+.modal-card-rarity { color: #e10600; font-weight: 600; }
 
 .modal-card-price {
   text-align: center;
@@ -544,9 +510,7 @@
   margin-bottom: 8px;
 }
 
-.modal-input:focus {
-  border-color: #e10600;
-}
+.modal-input:focus { border-color: #e10600; }
 
 .modal-actions {
   display: flex;
@@ -566,7 +530,6 @@
   font-family: var(--font-head);
   font-size: 14px;
   font-weight: 600;
-  letter-spacing: 0.3px;
   cursor: pointer;
   transition: all 0.15s ease;
   color: #fafafa;
@@ -577,18 +540,14 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.modal-action.default:active {
-  background: rgba(255, 255, 255, 0.1);
-}
+.modal-action.default:active { background: rgba(255, 255, 255, 0.1); }
 
 .modal-action.primary {
   background: #e10600;
   color: white;
 }
 
-.modal-action.primary:active {
-  background: #ff1801;
-}
+.modal-action.primary:active { background: #ff1801; }
 
 .modal-action.danger {
   background: transparent;
@@ -625,13 +584,8 @@
   transform: translateX(-50%) translateY(0);
 }
 
-.toast-success {
-  border-color: rgba(40, 200, 64, 0.5);
-}
-
-.toast-error {
-  border-color: rgba(239, 68, 68, 0.5);
-}
+.toast-success { border-color: rgba(40, 200, 64, 0.5); }
+.toast-error { border-color: rgba(239, 68, 68, 0.5); }
 
 /* ═══ DROP ═══ */
 
@@ -662,9 +616,7 @@
   animation: cardAppear 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.drop-result.visible {
-  display: flex;
-}
+.drop-result.visible { display: flex; }
 
 @keyframes cardAppear {
   0% { transform: scale(0.5) rotate(-10deg); opacity: 0; }
@@ -690,34 +642,14 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
-  object-position: center;
   display: block;
 }
 
-.drop-card.legendary {
-  border-color: #fbbf24;
-  box-shadow: 0 0 40px rgba(251, 191, 36, 0.4);
-}
-
-.drop-card.limited {
-  border-color: #ef4444;
-  box-shadow: 0 0 40px rgba(239, 68, 68, 0.5);
-}
-
-.drop-card.mythic {
-  border-color: #f97316;
-  box-shadow: 0 0 40px rgba(249, 115, 22, 0.4);
-}
-
-.drop-card.epic {
-  border-color: #8b5cf6;
-  box-shadow: 0 0 40px rgba(139, 92, 246, 0.4);
-}
-
-.drop-card.rare {
-  border-color: #28c840;
-  box-shadow: 0 0 40px rgba(40, 200, 64, 0.3);
-}
+.drop-card.legendary { border-color: #fbbf24; box-shadow: 0 0 40px rgba(251, 191, 36, 0.4); }
+.drop-card.limited { border-color: #ef4444; box-shadow: 0 0 40px rgba(239, 68, 68, 0.5); }
+.drop-card.mythic { border-color: #f97316; box-shadow: 0 0 40px rgba(249, 115, 22, 0.4); }
+.drop-card.epic { border-color: #8b5cf6; box-shadow: 0 0 40px rgba(139, 92, 246, 0.4); }
+.drop-card.rare { border-color: #28c840; box-shadow: 0 0 40px rgba(40, 200, 64, 0.3); }
 
 .drop-card-number {
   position: absolute;
@@ -807,11 +739,7 @@
   margin-top: 16px;
 }
 
-.drop-btn:active:not(:disabled) {
-  transform: scale(0.98);
-  background: #ff1801;
-}
-
+.drop-btn:active:not(:disabled) { transform: scale(0.98); background: #ff1801; }
 .drop-btn:disabled {
   background: rgba(255, 255, 255, 0.05);
   color: rgba(255, 255, 255, 0.3);
@@ -826,10 +754,7 @@
   margin-top: 12px;
 }
 
-.drop-counter b {
-  color: #fafafa;
-  font-family: var(--font-mono);
-}
+.drop-counter b { color: #fafafa; font-family: var(--font-mono); }
 
 /* ═══ PVP ═══ */
 
@@ -852,36 +777,22 @@
   font-family: var(--font-head);
   font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.5px;
   cursor: pointer;
   transition: all 0.15s ease;
   color: #fafafa;
 }
 
-.pvp-btn.primary {
-  background: #e10600;
-  color: white;
-}
-
-.pvp-btn.primary:active {
-  background: #ff1801;
-  transform: scale(0.98);
-}
+.pvp-btn.primary { background: #e10600; color: white; }
+.pvp-btn.primary:active { background: #ff1801; transform: scale(0.98); }
 
 .pvp-btn.default {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.pvp-btn.default:active {
-  background: rgba(255, 255, 255, 0.1);
-}
+.pvp-btn.default:active { background: rgba(255, 255, 255, 0.1); }
 
-.pvp-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+.pvp-list { display: flex; flex-direction: column; gap: 8px; }
 
 .pvp-empty {
   display: flex;
@@ -891,7 +802,6 @@
   padding: 60px 20px;
   color: rgba(255, 255, 255, 0.3);
   text-align: center;
-  font-family: var(--font-body);
   font-size: 14px;
 }
 
@@ -905,30 +815,15 @@
   border-left: 3px solid rgba(255, 255, 255, 0.1);
 }
 
-.pvp-battle.incoming {
-  border-left-color: #e10600;
-  background: rgba(225, 6, 0, 0.05);
-}
+.pvp-battle.incoming { border-left-color: #e10600; background: rgba(225, 6, 0, 0.05); }
+.pvp-battle.outgoing { border-left-color: #60a5fa; background: rgba(96, 165, 250, 0.05); }
 
-.pvp-battle.outgoing {
-  border-left-color: #60a5fa;
-  background: rgba(96, 165, 250, 0.05);
-}
-
-.pvp-battle-info {
-  flex: 1;
-  min-width: 0;
-}
+.pvp-battle-info { flex: 1; min-width: 0; }
 
 .pvp-battle-title {
-  font-family: var(--font-body);
   font-size: 14px;
   color: #fafafa;
   margin-bottom: 4px;
-}
-
-.pvp-battle-title b {
-  font-family: var(--font-head);
 }
 
 .pvp-battle-meta {
@@ -937,42 +832,23 @@
   color: rgba(255, 255, 255, 0.5);
 }
 
-.pvp-battle-actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
+.pvp-battle-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
 .pvp-mini-btn {
   padding: 8px 12px;
   border: none;
   border-radius: 8px;
-  font-family: var(--font-body);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
 }
 
-.pvp-mini-btn.primary {
-  background: #e10600;
-  color: white;
-}
-
-.pvp-mini-btn.primary:active {
-  background: #ff1801;
-}
-
+.pvp-mini-btn.primary { background: #e10600; color: white; }
 .pvp-mini-btn.default {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: #fafafa;
 }
-
-.pvp-mini-btn.default:active {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 .pvp-mini-btn.danger {
   background: transparent;
   border: 1px solid #ef4444;
@@ -981,16 +857,12 @@
 
 .pvp-status {
   text-align: center;
-  font-family: var(--font-body);
   font-size: 13px;
   color: rgba(255, 255, 255, 0.5);
   margin: 8px 0 12px;
 }
 
-.pvp-status b {
-  color: #fafafa;
-  font-family: var(--font-mono);
-}
+.pvp-status b { color: #fafafa; font-family: var(--font-mono); }
 
 .pvp-cards-grid {
   display: grid;
@@ -1012,15 +884,7 @@
   position: relative;
 }
 
-.pvp-card:active {
-  transform: scale(0.96);
-}
-
-.pvp-card.chosen {
-  border-color: #28c840;
-  box-shadow: 0 0 12px rgba(40, 200, 64, 0.4);
-}
-
+.pvp-card.chosen { border-color: #28c840; box-shadow: 0 0 12px rgba(40, 200, 64, 0.4); }
 .pvp-card.legendary { border-color: #fbbf24; }
 .pvp-card.limited { border-color: #ef4444; }
 .pvp-card.mythic { border-color: #f97316; }
@@ -1061,7 +925,6 @@
 }
 
 .pvp-card-name {
-  font-family: var(--font-body);
   font-size: 10px;
   color: #fafafa;
   padding: 4px 6px 2px;
@@ -1123,21 +986,12 @@
   font-family: var(--font-head);
   font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.5px;
   cursor: pointer;
-  transition: all 0.15s ease;
   color: #fafafa;
 }
 
-.bank-btn.primary {
-  background: #e10600;
-  color: white;
-}
-
-.bank-btn.primary:active {
-  background: #ff1801;
-  transform: scale(0.98);
-}
+.bank-btn.primary { background: #e10600; color: white; }
+.bank-btn.primary:active { background: #ff1801; transform: scale(0.98); }
 
 .bank-warning {
   margin-top: 8px;
@@ -1146,7 +1000,6 @@
   border-left: 3px solid #ef4444;
   border-radius: 6px;
   color: #ef4444;
-  font-family: var(--font-body);
   font-size: 12px;
 }
 
@@ -1169,12 +1022,6 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.shop-btn:active {
-  background: rgba(225, 6, 0, 0.2);
-  border-color: rgba(225, 6, 0, 0.4);
 }
 
 .shop-btn.primary {
@@ -1184,12 +1031,7 @@
   grid-column: 1 / -1;
 }
 
-.shop-btn.primary:active {
-  background: #ff1801;
-}
-
 .shop-plus-info {
-  font-family: var(--font-body);
   font-size: 12px;
   color: rgba(255, 255, 255, 0.5);
   line-height: 1.6;
@@ -1202,13 +1044,283 @@
 
 .shop-attempts-left {
   text-align: center;
-  font-family: var(--font-body);
   font-size: 13px;
   color: rgba(255, 255, 255, 0.4);
   margin-top: 12px;
 }
 
-.shop-attempts-left b {
+.shop-attempts-left b { color: #fafafa; font-family: var(--font-mono); }
+
+/* ═══ RATING ═══ */
+
+.rating-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.rating-tab {
+  flex: 1;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: var(--font-head);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rating-tab.active {
+  background: rgba(225, 6, 0, 0.15);
+  border-color: #e10600;
   color: #fafafa;
+}
+
+.rating-content { display: flex; flex-direction: column; gap: 6px; }
+
+.rating-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+}
+
+.rating-medal {
+  font-size: 24px;
+  width: 36px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.rating-info { flex: 1; min-width: 0; }
+
+.rating-name {
+  font-family: var(--font-head);
+  font-size: 14px;
+  font-weight: 700;
+  color: #fafafa;
+  margin-bottom: 2px;
+}
+
+.rating-value {
   font-family: var(--font-mono);
-    } 
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* ═══ CLAN ═══ */
+
+.clan-hero {
+  text-align: center;
+  padding: 20px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  margin: 12px 0;
+}
+
+.clan-tag-name {
+  font-family: var(--font-head);
+  font-size: 22px;
+  font-weight: 800;
+  color: #e10600;
+  margin-bottom: 4px;
+}
+
+.clan-meta {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.clan-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.clan-stat {
+  background: rgba(20, 20, 22, 0.8);
+  padding: 12px 8px;
+}
+
+.clan-stat-value {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: #fafafa;
+}
+
+.clan-stat-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.clan-role { font-size: 13px; color: rgba(255, 255, 255, 0.6); }
+
+.clan-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.clan-btn {
+  padding: 14px 16px;
+  border: none;
+  border-radius: 10px;
+  font-family: var(--font-head);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  color: #fafafa;
+}
+
+.clan-btn.primary { background: #e10600; color: white; }
+
+.clan-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+
+.clan-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+}
+
+.clan-item-tag {
+  font-family: var(--font-head);
+  font-size: 14px;
+  font-weight: 700;
+  color: #e10600;
+  min-width: 50px;
+}
+
+.clan-item-info { flex: 1; min-width: 0; }
+
+.clan-item-name {
+  font-family: var(--font-head);
+  font-size: 14px;
+  font-weight: 600;
+  color: #fafafa;
+}
+
+.clan-item-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 2px;
+}
+
+.clan-mini-btn {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.clan-mini-btn.primary { background: #e10600; color: white; }
+
+.clan-lock { font-size: 20px; }
+
+/* ═══ AUCTION ═══ */
+
+.auction-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.auction-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  align-items: center;
+}
+
+.auction-image {
+  width: 60px;
+  height: 80px;
+  background: #0a0a0a;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.auction-image img { width: 100%; height: 100%; object-fit: contain; }
+
+.auction-info { flex: 1; min-width: 0; }
+
+.auction-name {
+  font-family: var(--font-head);
+  font-size: 14px;
+  font-weight: 600;
+  color: #fafafa;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.auction-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 4px;
+}
+
+.auction-price {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: #d4a017;
+}
+
+.auction-bidder {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-left: 6px;
+}
+
+.auction-time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #e10600;
+  margin-top: 2px;
+}
+
+.auction-actions { display: flex; flex-direction: column; gap: 4px; }
+
+.auction-mini-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.auction-mini-btn.primary { background: #e10600; color: white; }
+.auction-mini-btn.default {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fafafa;
+}
