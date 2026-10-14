@@ -769,6 +769,769 @@ async def shop_buy_attempts(
 
 
 # ═════════════════════════════════════════════
+# PVP
+# ═════════════════════════════════════════════
+
+class PvpDuelRequest(BaseModel):
+    opponent_username: str
+
+
+class PvpStakeRequest(BaseModel):
+    battle_id: int
+    user_card_ids: list[int]
+
+
+class PvpBattleIdRequest(BaseModel):
+    battle_id: int
+
+
+@router.get("/pvp/battles")
+async def list_battles(user: User = Depends(get_current_user)):
+    from db.models import PvpBattle
+
+    async with AsyncSessionLocal() as session:
+        incoming = (await session.execute(
+            select(PvpBattle).where(
+                PvpBattle.opponent_id == user.id,
+                PvpBattle.status == "pending",
+            ).order_by(PvpBattle.created_at.desc()).limit(20)
+        )).scalars().all()
+
+        outgoing = (await session.execute(
+            select(PvpBattle).where(
+                PvpBattle.challenger_id == user.id,
+                PvpBattle.status == "pending",
+            ).order_by(PvpBattle.created_at.desc()).limit(20)
+        )).scalars().all()
+
+        all_ids = set()
+        for b in incoming + outgoing:
+            all_ids.add(b.challenger_id)
+            if b.opponent_id:
+                all_ids.add(b.opponent_id)
+
+        users_map = {}
+        if all_ids:
+            us = (await session.execute(
+                select(User).where(User.id.in_(all_ids))
+            )).scalars().all()
+            users_map = {u.id: u.username for u in us}
+
+    def fmt(b):
+        opponent_id = b.opponent_id if b.challenger_id == user.id else b.challenger_id
+        return {
+            "id": b.id,
+            "challenger": users_map.get(b.challenger_id, "?"),
+            "opponent": users_map.get(b.opponent_id) if b.opponent_id else None,
+            "opponent_username": users_map.get(opponent_id, "?"),
+            "direction": "incoming" if b.opponent_id == user.id else "outgoing",
+            "money_stake": b.money_stake,
+            "created_at": b.created_at.isoformat(),
+        }
+
+    return {
+        "incoming": [fmt(b) for b in incoming],
+        "outgoing": [fmt(b) for b in outgoing],
+    }
+
+
+@router.post("/pvp/duel")
+async def create_duel(
+    payload: PvpDuelRequest,
+    user: User = Depends(get_current_user),
+):
+    from db.models import PvpBattle, PvpSeason
+
+    opponent_username = payload.opponent_username.lstrip("@").lower()
+
+    if opponent_username == user.username_normalized:
+        raise HTTPException(400, "Нельзя вызвать себя")
+
+    async with AsyncSessionLocal() as session:
+        opponent = (await session.execute(
+            select(User).where(User.username_normalized == opponent_username)
+        )).scalar_one_or_none()
+
+        if opponent is None:
+            raise HTTPException(404, f"@{opponent_username} не найден")
+
+        if user.balance < settings.PVP_FEE:
+            raise HTTPException(400, f"Нужно {settings.PVP_FEE} монет")
+
+        season = (await session.execute(
+            select(PvpSeason).where(PvpSeason.is_active == True)
+        )).scalar_one_or_none()
+
+        battle = PvpBattle(
+            challenger_id=user.id,
+            opponent_id=opponent.id,
+            status="pending",
+            money_stake=settings.PVP_FEE,
+            season_id=season.id if season else None,
+        )
+        session.add(battle)
+        await session.commit()
+        await session.refresh(battle)
+
+        return {
+            "ok": True,
+            "battle_id": battle.id,
+            "opponent": opponent.username,
+        }
+
+
+@router.post("/pvp/find")
+async def find_opponent(user: User = Depends(get_current_user)):
+    from db.models import PvpBattle, PvpSeason
+    import random
+
+    async with AsyncSessionLocal() as session:
+        min_rating = max(0, user.pvp_rating - 200)
+        max_rating = user.pvp_rating + 200
+
+        candidates = (await session.execute(
+            select(User)
+            .where(
+                User.id != user.id,
+                User.ban_level == "none",
+                User.pvp_rating >= min_rating,
+                User.pvp_rating <= max_rating,
+            )
+            .limit(20)
+        )).scalars().all()
+
+        if not candidates:
+            raise HTTPException(404, "Не найдено противников")
+
+        opponent = random.choice(candidates)
+
+        if user.balance < settings.PVP_FEE:
+            raise HTTPException(400, f"Нужно {settings.PVP_FEE} монет")
+
+        season = (await session.execute(
+            select(PvpSeason).where(PvpSeason.is_active == True)
+        )).scalar_one_or_none()
+
+        battle = PvpBattle(
+            challenger_id=user.id,
+            opponent_id=opponent.id,
+            status="pending",
+            money_stake=settings.PVP_FEE,
+            season_id=season.id if season else None,
+        )
+        session.add(battle)
+        await session.commit()
+        await session.refresh(battle)
+
+        return {
+            "ok": True,
+            "battle_id": battle.id,
+            "opponent": opponent.username,
+        }
+
+
+@router.get("/pvp/battle/{battle_id}")
+async def get_battle(
+    battle_id: int,
+    user: User = Depends(get_current_user),
+):
+    from db.models import PvpBattle, PvpStake, UserCard as UC, Card as C
+
+    async with AsyncSessionLocal() as session:
+        battle = await session.get(PvpBattle, battle_id)
+        if battle is None:
+            raise HTTPException(404, "Battle not found")
+
+        if user.id not in (battle.challenger_id, battle.opponent_id):
+            raise HTTPException(403, "Not your battle")
+
+        challenger = await session.get(User, battle.challenger_id)
+        opponent = await session.get(User, battle.opponent_id) if battle.opponent_id else None
+
+        my_cards = (await session.execute(
+            select(UC, C)
+            .join(C, UC.card_id == C.id)
+            .where(
+                UC.user_id == user.id,
+                UC.is_locked == False,
+            )
+            .order_by(C.current_price.desc())
+            .limit(30)
+        )).all()
+
+        my_stakes = (await session.execute(
+            select(PvpStake)
+            .where(
+                PvpStake.battle_id == battle.id,
+                PvpStake.user_id == user.id,
+            )
+        )).scalars().all()
+        chosen_ids = {s.user_card_id for s in my_stakes}
+
+    return {
+        "id": battle.id,
+        "status": battle.status,
+        "challenger": challenger.username if challenger else "?",
+        "opponent": opponent.username if opponent else None,
+        "challenger_ready": battle.challenger_ready,
+        "opponent_ready": battle.opponent_ready,
+        "money_stake": battle.money_stake,
+        "my_cards": [
+            {
+                "user_card_id": uc.id,
+                "card_id": c.id,
+                "name": c.name,
+                "rarity": c.rarity,
+                "price": c.current_price,
+                "image_url": f"/api/cards/{c.id}/image" if c.image_file_id else None,
+                "is_chosen": uc.id in chosen_ids,
+            }
+            for uc, c in my_cards
+        ],
+        "chosen_count": len(chosen_ids),
+        "max_stakes": settings.PVP_MAX_STAKES_PER_SIDE,
+    }
+
+
+@router.post("/pvp/stake")
+async def toggle_stake(
+    payload: PvpStakeRequest,
+    user: User = Depends(get_current_user),
+):
+    from db.models import PvpBattle, PvpStake, UserCard as UC
+
+    async with AsyncSessionLocal() as session:
+        battle = await session.get(PvpBattle, payload.battle_id)
+        if battle is None or battle.status != "pending":
+            raise HTTPException(404, "Battle not found")
+
+        if user.id not in (battle.challenger_id, battle.opponent_id):
+            raise HTTPException(403, "Not your battle")
+
+        side = "challenger" if battle.challenger_id == user.id else "opponent"
+
+        existing = None
+        for card_id in payload.user_card_ids:
+            s = (await session.execute(
+                select(PvpStake).where(
+                    PvpStake.battle_id == battle.id,
+                    PvpStake.user_card_id == card_id,
+                )
+            )).scalar_one_or_none()
+            if s:
+                existing = s
+                break
+
+        if existing:
+            uc = await session.get(UC, existing.user_card_id)
+            if uc:
+                uc.is_locked = False
+            await session.delete(existing)
+            await session.commit()
+            return {"ok": True, "action": "removed"}
+
+        current_stakes = (await session.execute(
+            select(PvpStake).where(
+                PvpStake.battle_id == battle.id,
+                PvpStake.user_id == user.id,
+            )
+        )).scalars().all()
+
+        if len(current_stakes) >= settings.PVP_MAX_STAKES_PER_SIDE:
+            raise HTTPException(400, f"Максимум {settings.PVP_MAX_STAKES_PER_SIDE} карт")
+
+        for card_id in payload.user_card_ids:
+            uc = (await session.execute(
+                select(UC).where(
+                    UC.id == card_id,
+                    UC.user_id == user.id,
+                    UC.is_locked == False,
+                )
+            )).scalar_one_or_none()
+
+            if uc is None:
+                continue
+
+            uc.is_locked = True
+            session.add(PvpStake(
+                battle_id=battle.id,
+                user_id=user.id,
+                user_card_id=card_id,
+                side=side,
+            ))
+
+        await session.commit()
+        return {"ok": True, "action": "added"}
+
+
+@router.post("/pvp/ready")
+async def set_ready(
+    payload: PvpBattleIdRequest,
+    user: User = Depends(get_current_user),
+):
+    from db.models import PvpBattle, PvpStake
+
+    async with AsyncSessionLocal() as session:
+        battle = await session.get(PvpBattle, payload.battle_id)
+        if battle is None or battle.status != "pending":
+            raise HTTPException(404, "Battle not found")
+
+        if user.id not in (battle.challenger_id, battle.opponent_id):
+            raise HTTPException(403, "Not your battle")
+
+        side = "challenger" if battle.challenger_id == user.id else "opponent"
+
+        my_stakes = (await session.execute(
+            select(PvpStake).where(
+                PvpStake.battle_id == battle.id,
+                PvpStake.user_id == user.id,
+            )
+        )).scalars().all()
+
+        if not my_stakes:
+            raise HTTPException(400, "Поставь хотя бы одну карту")
+
+        if side == "challenger":
+            battle.challenger_ready = True
+        else:
+            battle.opponent_ready = True
+
+        both_ready = battle.challenger_ready and battle.opponent_ready
+
+        if both_ready:
+            await _run_battle(session, battle)
+
+        await session.commit()
+
+        return {"ok": True, "both_ready": both_ready}
+
+
+@router.post("/pvp/decline")
+async def decline_battle(
+    payload: PvpBattleIdRequest,
+    user: User = Depends(get_current_user),
+):
+    from db.models import PvpBattle, PvpStake, UserCard as UC
+
+    async with AsyncSessionLocal() as session:
+        battle = await session.get(PvpBattle, payload.battle_id)
+        if battle is None or battle.status != "pending":
+            raise HTTPException(404, "Battle not found")
+
+        if battle.opponent_id != user.id and battle.challenger_id != user.id:
+            raise HTTPException(403, "Not your battle")
+
+        battle.status = "declined"
+
+        stakes = (await session.execute(
+            select(PvpStake).where(PvpStake.battle_id == battle.id)
+        )).scalars().all()
+
+        for s in stakes:
+            uc = await session.get(UC, s.user_card_id)
+            if uc:
+                uc.is_locked = False
+
+        await session.commit()
+
+    return {"ok": True}
+
+
+async def _run_battle(session, battle):
+    import random
+    from db.models import PvpStake, UserCard as UC
+    from services.pvp import calculate_elo, calculate_pvp_money_prize
+
+    challenger = await session.get(User, battle.challenger_id)
+    opponent = await session.get(User, battle.opponent_id)
+
+    if challenger is None or opponent is None:
+        battle.status = "expired"
+        return
+
+    cr = random.randint(1, 6) + random.randint(1, 6)
+    orr = random.randint(1, 6) + random.randint(1, 6)
+
+    while cr == orr:
+        cr = random.randint(1, 6) + random.randint(1, 6)
+        orr = random.randint(1, 6) + random.randint(1, 6)
+
+    if cr > orr:
+        winner, loser = challenger, opponent
+        winner_side, loser_side = "challenger", "opponent"
+    else:
+        winner, loser = opponent, challenger
+        winner_side, loser_side = "opponent", "challenger"
+
+    elo = calculate_elo(winner.pvp_rating, loser.pvp_rating)
+    winner_delta = elo.winner_delta
+    loser_delta = elo.loser_delta
+
+    if winner.plus_tier == "indy_plus":
+        winner_delta = int(winner_delta * settings.PLUS_PVP_MULTIPLIER)
+    if loser.plus_tier == "indy_plus":
+        loser_delta = int(loser_delta / settings.PLUS_PVP_MULTIPLIER)
+
+    winner.pvp_rating += winner_delta
+    loser.pvp_rating = max(100, loser.pvp_rating + loser_delta)
+    winner.pvp_wins += 1
+    winner.pvp_wins_total += 1
+    loser.pvp_losses += 1
+    loser.pvp_losses_total += 1
+
+    loser_stakes = (await session.execute(
+        select(PvpStake).where(
+            PvpStake.battle_id == battle.id,
+            PvpStake.side == loser_side,
+        )
+    )).scalars().all()
+
+    cards_transferred = 0
+    for s in loser_stakes:
+        uc = await session.get(UC, s.user_card_id)
+        if uc:
+            uc.user_id = winner.id
+            uc.is_locked = False
+            cards_transferred += 1
+
+    winner_stakes = (await session.execute(
+        select(PvpStake).where(
+            PvpStake.battle_id == battle.id,
+            PvpStake.side == winner_side,
+        )
+    )).scalars().all()
+
+    for s in winner_stakes:
+        uc = await session.get(UC, s.user_card_id)
+        if uc:
+            uc.is_locked = False
+
+    money_prize = calculate_pvp_money_prize(
+        battle.money_stake, battle.money_stake,
+        commission=settings.PVP_BANK_COMMISSION,
+    )
+    winner.balance += money_prize
+    loser.balance -= battle.money_stake
+
+    battle.status = "finished"
+    battle.challenger_roll = cr
+    battle.opponent_roll = orr
+    battle.winner_id = winner.id
+    battle.finished_at = datetime.utcnow()
+
+
+# ═════════════════════════════════════════════
+# RATING
+# ═════════════════════════════════════════════
+
+@router.get("/rating")
+async def get_rating(user: User = Depends(get_current_user)):
+    async with AsyncSessionLocal() as session:
+        money_top = (await session.execute(
+            select(User).order_by(User.balance.desc()).limit(10)
+        )).scalars().all()
+
+        season_top = (await session.execute(
+            select(User).order_by(User.pvp_rating.desc()).limit(10)
+        )).scalars().all()
+
+        eternal_top = (await session.execute(
+            select(User).order_by(User.pvp_wins_total.desc()).limit(10)
+        )).scalars().all()
+
+    def fmt(u, i):
+        return {
+            "rank": i + 1,
+            "username": u.username,
+            "balance": u.balance,
+            "pvp_rating": u.pvp_rating,
+            "pvp_wins_total": u.pvp_wins_total,
+            "pvp_losses_total": u.pvp_losses_total,
+            "collection_value": 0,
+        }
+
+    return {
+        "money": [fmt(u, i) for i, u in enumerate(money_top)],
+        "season": [fmt(u, i) for i, u in enumerate(season_top)],
+        "eternal": [fmt(u, i) for i, u in enumerate(eternal_top)],
+    }
+
+
+# ═════════════════════════════════════════════
+# CLAN
+# ═════════════════════════════════════════════
+
+class ClanCreateRequest(BaseModel):
+    name: str
+    tag: str
+
+
+class ClanJoinRequest(BaseModel):
+    clan_id: int
+
+
+@router.get("/clan/my")
+async def clan_my(user: User = Depends(get_current_user)):
+    from db.models import Clan, ClanMember
+
+    async with AsyncSessionLocal() as session:
+        member = (await session.execute(
+            select(ClanMember).where(ClanMember.user_id == user.id)
+        )).scalar_one_or_none()
+
+        if member is None:
+            return {"clan": None, "role": None}
+
+        clan = await session.get(Clan, member.clan_id)
+        if clan is None:
+            return {"clan": None, "role": None}
+
+        count = (await session.execute(
+            select(func.count(ClanMember.id)).where(ClanMember.clan_id == clan.id)
+        )).scalar() or 0
+
+        owner = await session.get(User, clan.owner_id)
+
+    return {
+        "clan": {
+            "id": clan.id,
+            "name": clan.name,
+            "tag": clan.tag,
+            "level": clan.level,
+            "xp": clan.xp,
+            "treasury": clan.treasury,
+            "members_count": count,
+            "is_open": clan.is_open,
+            "owner": owner.username if owner else "?",
+        },
+        "role": member.role,
+    }
+
+
+@router.get("/clan/list")
+async def clan_list(user: User = Depends(get_current_user)):
+    from db.models import Clan, ClanMember
+
+    async with AsyncSessionLocal() as session:
+        clans = (await session.execute(
+            select(Clan).where(Clan.is_active == True).order_by(Clan.xp.desc()).limit(30)
+        )).scalars().all()
+
+        result = []
+        for c in clans:
+            count = (await session.execute(
+                select(func.count(ClanMember.id)).where(ClanMember.clan_id == c.id)
+            )).scalar() or 0
+            owner = await session.get(User, c.owner_id)
+            result.append({
+                "id": c.id,
+                "name": c.name,
+                "tag": c.tag,
+                "level": c.level,
+                "xp": c.xp,
+                "treasury": c.treasury,
+                "members_count": count,
+                "is_open": c.is_open,
+                "owner": owner.username if owner else "?",
+            })
+
+    return result
+
+
+@router.post("/clan/create")
+async def clan_create(
+    payload: ClanCreateRequest,
+    user: User = Depends(get_current_user),
+):
+    from services.clan import create_clan
+
+    async with AsyncSessionLocal() as session:
+        user_row = await session.get(User, user.id)
+        if user_row is None:
+            raise HTTPException(404, "User not found")
+
+        result = await create_clan(session, user_row, payload.name, payload.tag, None)
+
+        if not result.ok:
+            raise HTTPException(400, result.reason)
+
+        return {"ok": True, "clan_id": result.clan_id}
+
+
+@router.post("/clan/join")
+async def clan_join(
+    payload: ClanJoinRequest,
+    user: User = Depends(get_current_user),
+):
+    from services.clan import join_clan
+
+    async with AsyncSessionLocal() as session:
+        user_row = await session.get(User, user.id)
+        if user_row is None:
+            raise HTTPException(404, "User not found")
+
+        result = await join_clan(session, user_row, payload.clan_id)
+
+        if not result.ok:
+            raise HTTPException(400, result.reason)
+
+        return {"ok": True, "clan_id": result.clan_id}
+
+
+# ═════════════════════════════════════════════
+# AUCTION
+# ═════════════════════════════════════════════
+
+class AuctionBidRequest(BaseModel):
+    lot_id: int
+    amount: int
+
+
+class AuctionBuyoutRequest(BaseModel):
+    lot_id: int
+
+
+@router.get("/auction/list")
+async def auction_list(user: User = Depends(get_current_user)):
+    from db.models import Auction
+
+    async with AsyncSessionLocal() as session:
+        lots = (await session.execute(
+            select(Auction).where(
+                Auction.status == "active",
+                Auction.ends_at > datetime.utcnow(),
+            ).order_by(Auction.ends_at.asc()).limit(30)
+        )).scalars().all()
+
+        result = []
+        for lot in lots:
+            seller = await session.get(User, lot.seller_id)
+            bidder = await session.get(User, lot.current_bidder_id) if lot.current_bidder_id else None
+
+            uc = await session.get(UserCard, lot.user_card_id)
+            card = await session.get(Card, uc.card_id) if uc else None
+
+            if card is None:
+                continue
+
+            ends_in = int((lot.ends_at - datetime.utcnow()).total_seconds() / 60)
+
+            result.append({
+                "id": lot.id,
+                "seller": seller.username if seller else "?",
+                "card_id": card.id,
+                "card_name": card.name,
+                "rarity": card.rarity,
+                "image_url": f"/api/cards/{card.id}/image" if card.image_file_id else None,
+                "start_price": lot.start_price,
+                "buyout_price": lot.buyout_price,
+                "current_bid": lot.current_bid,
+                "current_bidder": bidder.username if bidder else None,
+                "bid_count": lot.bid_count,
+                "ends_at": lot.ends_at.isoformat(),
+                "ends_in_minutes": ends_in,
+            })
+
+    return result
+
+
+@router.post("/auction/bid")
+async def auction_bid(
+    payload: AuctionBidRequest,
+    user: User = Depends(get_current_user),
+):
+    from db.models import Auction, AuctionBid
+
+    async with AsyncSessionLocal() as session:
+        lot = await session.get(Auction, payload.lot_id)
+        if lot is None or lot.status != "active":
+            raise HTTPException(404, "Лот не найден")
+
+        if lot.seller_id == user.id:
+            raise HTTPException(400, "Нельзя ставить на свой лот")
+
+        min_bid = int(lot.current_bid * 1.05) if lot.current_bid else lot.start_price
+
+        if payload.amount < min_bid:
+            raise HTTPException(400, f"Минимум {min_bid:,}")
+
+        if user.balance < payload.amount:
+            raise HTTPException(400, f"Нужно {payload.amount:,}")
+
+        if lot.current_bidder_id:
+            prev = await session.get(User, lot.current_bidder_id)
+            if prev:
+                prev.balance += lot.current_bid
+
+        user_row = await session.get(User, user.id)
+        if user_row is None:
+            raise HTTPException(404, "User not found")
+
+        user_row.balance -= payload.amount
+        lot.current_bid = payload.amount
+        lot.current_bidder_id = user_row.id
+        lot.bid_count += 1
+
+        session.add(AuctionBid(
+            auction_id=lot.id,
+            bidder_id=user_row.id,
+            amount=payload.amount,
+        ))
+
+        await session.commit()
+
+    return {"ok": True, "amount": payload.amount}
+
+
+@router.post("/auction/buyout")
+async def auction_buyout(
+    payload: AuctionBuyoutRequest,
+    user: User = Depends(get_current_user),
+):
+    from db.models import Auction
+
+    async with AsyncSessionLocal() as session:
+        lot = await session.get(Auction, payload.lot_id)
+        if lot is None or lot.status != "active" or not lot.buyout_price:
+            raise HTTPException(404, "Выкуп недоступен")
+
+        if lot.seller_id == user.id:
+            raise HTTPException(400, "Нельзя выкупить свой лот")
+
+        user_row = await session.get(User, user.id)
+        if user_row is None:
+            raise HTTPException(404, "User not found")
+
+        if user_row.balance < lot.buyout_price:
+            raise HTTPException(400, f"Нужно {lot.buyout_price:,}")
+
+        if lot.current_bidder_id:
+            prev = await session.get(User, lot.current_bidder_id)
+            if prev:
+                prev.balance += lot.current_bid
+
+        seller = await session.get(User, lot.seller_id)
+        commission = 10.0
+        fee = int(lot.buyout_price * commission / 100)
+
+        user_row.balance -= lot.buyout_price
+        if seller:
+            seller.balance += lot.buyout_price - fee
+
+        uc = await session.get(UserCard, lot.user_card_id)
+        if uc:
+            uc.user_id = user_row.id
+            uc.is_locked = False
+
+        lot.status = "sold"
+        lot.sold_at = datetime.utcnow()
+
+        await session.commit()
+
+    return {"ok": True, "price": lot.buyout_price}
+
+
+# ═════════════════════════════════════════════
 # ADMIN COMMAND
 # ═════════════════════════════════════════════
 
