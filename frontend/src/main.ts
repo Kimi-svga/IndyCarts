@@ -1,15 +1,18 @@
 /**
  * Visual Merge — точка входа.
+ * Design by Expo
  */
 
 import './styles/global.css';
 import './styles/terminal.css';
 import './styles/app.css';
+import './styles/settings.css';
 
 import { Terminal } from '@/core/terminal';
 import { authenticate } from '@/api/auth';
 import { createApiRepo } from '@/api/repo';
 import { apiFetch } from '@/api/client';
+import { applySettings, loadSettings } from '@/settings/store';
 
 import { Router } from '@/ui/router';
 import { createHeader } from '@/ui/components/header';
@@ -49,11 +52,18 @@ if (!app) {
   throw new Error('#app not found');
 }
 
+// ─── Применяем настройки СРАЗУ ───
+applySettings(loadSettings());
+
+// Системная тема — следим
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  const s = loadSettings();
+  if (s.theme === 'system') applySettings(s);
+});
+
 if (window.Telegram?.WebApp) {
   window.Telegram.WebApp.ready();
   window.Telegram.WebApp.expand();
-  window.Telegram.WebApp.setHeaderColor('#0a0a0a');
-  window.Telegram.WebApp.setBackgroundColor('#0a0a0a');
 }
 
 let meData: MeData | null = null;
@@ -187,8 +197,7 @@ router.register('plus', (el) => {
       },
     });
 
-    (window as unknown as { __vm_terminal?: Terminal }).__vm_terminal =
-      globalTerminal;
+    (window as unknown as { __vm_terminal?: Terminal }).__vm_terminal = globalTerminal;
   }
 
   await router.navigate('menu');
