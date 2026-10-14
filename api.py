@@ -268,7 +268,6 @@ async def get_card_image(card_id: int):
 
 @router.post("/drop")
 async def drop_card(user: User = Depends(get_current_user)):
-    """Дропнуть карту (списывает 1 попытку)."""
     from services.drop import Drop
     from services.clan import get_clan_bonuses, get_user_clan
 
@@ -428,6 +427,344 @@ async def gift_card(
             "ok": True,
             "card_name": card.name,
             "receiver": receiver.username,
+        }
+
+
+# ═════════════════════════════════════════════
+# MARKET
+# ═════════════════════════════════════════════
+
+class MarketBuyRequest(BaseModel):
+    card_id: int
+
+
+@router.get("/market/list")
+async def market_list(user: User = Depends(get_current_user)):
+    async with AsyncSessionLocal() as session:
+        cards = (await session.execute(
+            select(Card)
+            .where(Card.is_active == True)
+            .order_by(Card.current_price.desc())
+            .limit(30)
+        )).scalars().all()
+
+    return [
+        {
+            "id": c.id,
+            "name": c.name,
+            "rarity": c.rarity,
+            "team": c.team,
+            "year": c.year,
+            "price": c.current_price,
+            "base_price": c.base_price,
+            "image_url": f"/api/cards/{c.id}/image" if c.image_file_id else None,
+            "max_supply": c.max_supply,
+            "issued": c.issued,
+        }
+        for c in cards
+    ]
+
+
+@router.post("/market/buy")
+async def market_buy(
+    payload: MarketBuyRequest,
+    user: User = Depends(get_current_user),
+):
+    async with AsyncSessionLocal() as session:
+        user_row = await session.get(User, user.id)
+        if user_row is None:
+            raise HTTPException(404, "User not found")
+
+        card = await session.get(Card, payload.card_id)
+        if card is None or not card.is_active:
+            raise HTTPException(404, "Карта не найдена")
+
+        price = card.current_price
+
+        if user_row.balance < price:
+            raise HTTPException(400, f"Нужно {price:,} монет")
+
+        if card.max_supply is not None and card.issued >= card.max_supply:
+            raise HTTPException(400, "Тираж исчерпан")
+
+        serial = None
+        if card.max_supply is not None:
+            card.issued += 1
+            serial = card.issued
+
+        user_row.balance -= price
+
+        session.add(UserCard(
+            user_id=user_row.id,
+            card_id=card.id,
+            acquired_price=price,
+            serial_number=serial,
+        ))
+
+        await session.commit()
+
+        return {
+            "ok": True,
+            "card_name": card.name,
+            "price": price,
+            "new_balance": user_row.balance,
+            "serial": serial,
+        }
+
+
+# ═════════════════════════════════════════════
+# BANK
+# ═════════════════════════════════════════════
+
+class LoanRequest(BaseModel):
+    amount: int
+
+
+class RepayRequest(BaseModel):
+    amount: int
+
+
+@router.get("/bank/info")
+async def bank_info(user: User = Depends(get_current_user)):
+    from db.models import Loan
+    from services.bank import calculate_max_loan, get_trust_rank
+
+    async with AsyncSessionLocal() as session:
+        loan = (await session.execute(
+            select(Loan).where(
+                Loan.user_id == user.id,
+                Loan.status.in_(["active", "overdue"]),
+            )
+        )).scalar_one_or_none()
+
+    max_loan = calculate_max_loan(user)
+    trust_rank = get_trust_rank(user.trust_score)
+
+    active_loan = None
+    if loan is not None:
+        days_left = (loan.due_at - datetime.utcnow()).days
+        remaining = loan.total_due - loan.paid
+        active_loan = {
+            "id": loan.id,
+            "principal": loan.principal,
+            "rate": float(loan.rate),
+            "total_due": loan.total_due,
+            "paid": loan.paid,
+            "remaining": remaining,
+            "due_at": loan.due_at.isoformat(),
+            "days_left": days_left,
+            "status": loan.status,
+        }
+
+    return {
+        "balance": user.balance,
+        "trust_score": user.trust_score,
+        "trust_rank": trust_rank,
+        "max_loan": max_loan,
+        "active_loan": active_loan,
+    }
+
+
+@router.post("/bank/loan")
+async def bank_loan(
+    payload: LoanRequest,
+    user: User = Depends(get_current_user),
+):
+    from db.models import Loan
+    from services.bank import (
+        calculate_max_loan,
+        calculate_total_due,
+        get_loan_rate,
+        get_loan_term,
+    )
+
+    if payload.amount < 1000:
+        raise HTTPException(400, "Минимум 1 000")
+
+    async with AsyncSessionLocal() as session:
+        user_row = await session.get(User, user.id)
+        if user_row is None:
+            raise HTTPException(404, "User not found")
+
+        existing = (await session.execute(
+            select(Loan).where(
+                Loan.user_id == user_row.id,
+                Loan.status.in_(["active", "overdue"]),
+            )
+        )).scalar_one_or_none()
+
+        if existing is not None:
+            raise HTTPException(400, "Уже есть активный кредит")
+
+        max_loan = calculate_max_loan(user_row)
+        if payload.amount > max_loan:
+            raise HTTPException(400, f"Максимум {max_loan:,}")
+
+        rate = get_loan_rate(payload.amount)
+        term_days = get_loan_term(payload.amount)
+        total_due = calculate_total_due(payload.amount)
+        due_at = datetime.utcnow() + timedelta(days=term_days)
+
+        user_row.balance += payload.amount
+        user_row.loan_amount = total_due
+        user_row.loan_due_at = due_at
+        user_row.loans_count += 1
+        user_row.total_borrowed += payload.amount
+
+        session.add(Loan(
+            user_id=user_row.id,
+            principal=payload.amount,
+            rate=rate,
+            total_due=total_due,
+            due_at=due_at,
+            status="active",
+        ))
+
+        await session.commit()
+
+        return {
+            "ok": True,
+            "amount": payload.amount,
+            "rate": float(rate),
+            "total_due": total_due,
+            "due_at": due_at.isoformat(),
+            "new_balance": user_row.balance,
+        }
+
+
+@router.post("/bank/repay")
+async def bank_repay(
+    payload: RepayRequest,
+    user: User = Depends(get_current_user),
+):
+    from db.models import Loan, LoanPayment
+    from services.bank import apply_trust, early_repay_discount, is_early_repay
+
+    if payload.amount <= 0:
+        raise HTTPException(400, "Сумма > 0")
+
+    async with AsyncSessionLocal() as session:
+        user_row = await session.get(User, user.id)
+        if user_row is None:
+            raise HTTPException(404, "User not found")
+
+        loan = (await session.execute(
+            select(Loan).where(
+                Loan.user_id == user_row.id,
+                Loan.status.in_(["active", "overdue"]),
+            )
+        )).scalar_one_or_none()
+
+        if loan is None:
+            raise HTTPException(404, "Нет активного кредита")
+
+        remaining = loan.total_due - loan.paid
+
+        discount = 0
+        if is_early_repay(loan):
+            discount = early_repay_discount(remaining)
+            remaining -= discount
+
+        amount = min(payload.amount, remaining)
+        closes_loan = amount >= remaining
+
+        if user_row.balance < amount:
+            raise HTTPException(400, f"Нужно {amount:,}")
+
+        user_row.balance -= amount
+        loan.paid += amount
+
+        session.add(LoanPayment(loan_id=loan.id, amount=amount))
+
+        trust_msg = ""
+        if closes_loan:
+            if is_early_repay(loan):
+                delta = apply_trust(user_row, "early_repay")
+                trust_msg = f"Досрочно! Trust +{delta}"
+            else:
+                delta = apply_trust(user_row, "on_time")
+                trust_msg = f"В срок! Trust +{delta}"
+
+            loan.status = "repaid"
+            loan.repaid_at = datetime.utcnow()
+            user_row.loan_amount = 0
+            user_row.loan_due_at = None
+            user_row.loans_repaid += 1
+
+        await session.commit()
+
+        return {
+            "ok": True,
+            "amount": amount,
+            "discount": discount,
+            "closes_loan": closes_loan,
+            "remaining": max(0, remaining - amount),
+            "new_balance": user_row.balance,
+            "trust_msg": trust_msg,
+        }
+
+
+# ═════════════════════════════════════════════
+# SHOP
+# ═════════════════════════════════════════════
+
+class ShopAttemptsRequest(BaseModel):
+    attempts: int
+
+
+@router.get("/shop/info")
+async def shop_info(user: User = Depends(get_current_user)):
+    return {
+        "coin_per_attempt": settings.SHOP_COIN_PER_ATTEMPT,
+        "max_attempts_per_day": settings.MAX_ATTEMPTS_PER_DAY,
+        "shop_attempts_today": user.shop_attempts_today,
+        "balance": user.balance,
+        "plus_price_coins": settings.PLUS_PRICE_COINS,
+        "plus_price_stars": settings.PLUS_PRICE_STARS,
+        "plus_duration_days": settings.PLUS_DURATION_DAYS,
+    }
+
+
+@router.post("/shop/attempts")
+async def shop_buy_attempts(
+    payload: ShopAttemptsRequest,
+    user: User = Depends(get_current_user),
+):
+    from datetime import date
+
+    if payload.attempts <= 0:
+        raise HTTPException(400, "Количество > 0")
+
+    cost = payload.attempts * settings.SHOP_COIN_PER_ATTEMPT
+
+    async with AsyncSessionLocal() as session:
+        user_row = await session.get(User, user.id)
+        if user_row is None:
+            raise HTTPException(404, "User not found")
+
+        today = date.today()
+        if user_row.last_shop_date != today:
+            user_row.shop_attempts_today = 0
+            user_row.last_shop_date = today
+
+        if user_row.shop_attempts_today + payload.attempts > settings.MAX_ATTEMPTS_PER_DAY:
+            raise HTTPException(400, f"Лимит {settings.MAX_ATTEMPTS_PER_DAY} попыток в день")
+
+        if user_row.balance < cost:
+            raise HTTPException(400, f"Нужно {cost:,} монет")
+
+        user_row.balance -= cost
+        user_row.daily_attempts += payload.attempts
+        user_row.shop_attempts_today += payload.attempts
+
+        await session.commit()
+
+        return {
+            "ok": True,
+            "attempts": payload.attempts,
+            "cost": cost,
+            "new_balance": user_row.balance,
+            "total_attempts": user_row.daily_attempts,
         }
 
 
