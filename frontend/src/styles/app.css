@@ -602,3 +602,198 @@
 .toast-error {
   border-color: rgba(239, 68, 68, 0.5);
 }
+
+/* ═══ DROP ═══ */
+
+.drop-stage {
+  min-height: 340px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.drop-placeholder {
+  font-size: 80px;
+  color: rgba(255, 255, 255, 0.15);
+  transition: all 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.drop-result {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  animation: cardAppear 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.drop-result.visible {
+  display: flex;
+}
+
+@keyframes cardAppear {
+  0% { transform: scale(0.5) rotate(-10deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+
+.drop-card {
+  width: 180px;
+  height: 240px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 12px;
+}
+
+.drop-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.drop-card.legendary {
+  border-color: #fbbf24;
+  box-shadow: 0 0 40px rgba(251, 191, 36, 0.4);
+}
+
+.drop-card.limited {
+  border-color: #ef4444;
+  box-shadow: 0 0 40px rgba(239, 68, 68, 0.5);
+}
+
+.drop-card.mythic {
+  border-color: #f97316;
+  box-shadow: 0 0 40px rgba(249, 115, 22, 0.4);
+}
+
+.drop-card.epic {
+  border-color: #8b5cf6;
+  box-shadow: 0 0 40px rgba(139, 92, 246, 0.4);
+}
+
+.drop-card.rare {
+  border-color: #28c840;
+  box-shadow: 0 0 40px rgba(40, 200, 64, 0.3);
+}
+
+.drop-card-number {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  font-family: var(--font-head);
+  font-size: 28px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.15);
+  letter-spacing: 1px;
+  line-height: 1;
+}
+
+.drop-card-name {
+  font-family: var(--font-head);
+  font-size: 18px;
+  font-weight: 700;
+  color: #fafafa;
+  margin-bottom: 4px;
+}
+
+.drop-card-rarity {
+  font-family: var(--font-head);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.drop-card-rarity.legendary { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+.drop-card-rarity.limited { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.drop-card-rarity.mythic { background: rgba(249, 115, 22, 0.15); color: #f97316; }
+.drop-card-rarity.epic { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
+.drop-card-rarity.rare { background: rgba(40, 200, 64, 0.15); color: #28c840; }
+
+.drop-iw {
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #e10600;
+  margin-top: 4px;
+}
+
+.drop-serial {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.drop-card-price {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: #d4a017;
+  margin-top: 4px;
+}
+
+.drop-bonus {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: #28c840;
+  margin-top: 4px;
+}
+
+.drop-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 20px;
+  background: #e10600;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-family: var(--font-head);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-top: 16px;
+}
+
+.drop-btn:active:not(:disabled) {
+  transform: scale(0.98);
+  background: #ff1801;
+}
+
+.drop-btn:disabled {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.3);
+  cursor: not-allowed;
+}
+
+.drop-counter {
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 12px;
+}
+
+.drop-counter b {
+  color: #fafafa;
+  font-family: var(--font-mono);
+}
