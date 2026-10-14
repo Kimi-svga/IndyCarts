@@ -4,21 +4,26 @@
  */
 
 :root {
+  /* Акцент — управляется настройками */
   --accent: #e10600;
   --accent-hover: #ff1801;
   --accent-soft: rgba(225, 6, 0, 0.15);
 
+  /* Фон — управляется настройками */
   --bg: #0a0a0a;
-  --bg-2: #141414;
-  --bg-3: #1a1a1a;
+  --bg-2: #141416;
+  --bg-3: #1a1a1c;
 
+  /* Текст */
   --text: #fafafa;
   --text-dim: #a0a0a0;
   --text-mute: #666;
 
+  /* Границы */
   --line: #262626;
   --line-2: #333;
 
+  /* Редкости */
   --gold: #d4a017;
   --green: #28c840;
   --blue: #3b82f6;
@@ -27,16 +32,47 @@
   --yellow: #fbbf24;
   --red: #ef4444;
 
-  --term-bg: rgba(20, 20, 22, 0.92);
-  --term-prompt: #28c840;
+  /* Отступы — управляются настройками */
+  --space: 16px;
+  --space-sm: 8px;
+  --space-lg: 24px;
 
-  --font-head: 'Unbounded', sans-serif;
-  --font-body: 'Onest', sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Monaco, 'Courier New', monospace;
-
+  /* Радиусы — управляются настройками */
   --radius: 10px;
   --radius-sm: 6px;
+  --radius-lg: 16px;
+
+  /* Шрифты */
+  --font-head: 'Unbounded', sans-serif;
+  --font-body: 'Onest', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Monaco, monospace;
+  --font-size-base: 15px;
+
   --transition: 0.15s ease;
+}
+
+/* ─── Светлая тема ─── */
+
+[data-theme="light"] {
+  --bg: #fafafa;
+  --bg-2: #ffffff;
+  --bg-3: #f0f0f0;
+  --text: #0a0a0a;
+  --text-dim: #555;
+  --text-mute: #999;
+  --line: #e5e5e5;
+  --line-2: #d0d0d0;
+}
+
+[data-theme="light"] .app-header,
+[data-theme="light"] .app-bottom-nav {
+  background: rgba(250, 250, 250, 0.85);
+}
+
+[data-theme="light"] .menu-item,
+[data-theme="light"] .info-card,
+[data-theme="light"] .card-item {
+  background: rgba(0, 0, 0, 0.02);
 }
 
 * {
@@ -47,13 +83,13 @@
 }
 
 html, body {
-  background: #0a0a0a;
+  background: var(--bg);
   background-image:
-    radial-gradient(ellipse at top, rgba(225, 6, 0, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at top, color-mix(in srgb, var(--accent) 6%, transparent) 0%, transparent 50%),
     radial-gradient(ellipse at bottom, rgba(59, 130, 246, 0.04) 0%, transparent 50%);
   color: var(--text);
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: var(--font-size-base);
   line-height: 1.5;
   height: 100vh;
   height: 100dvh;
@@ -73,7 +109,6 @@ body {
   overflow: hidden;
   min-height: 0;
   padding: 8px 8px 0;
-  gap: 0;
 }
 
 iconify-icon {
@@ -83,4 +118,8 @@ iconify-icon {
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  } 
