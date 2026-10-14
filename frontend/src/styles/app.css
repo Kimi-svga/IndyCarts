@@ -31,6 +31,7 @@
 }
 
 .app-header-btn {
+  position: relative;
   width: 36px;
   height: 36px;
   display: flex;
@@ -48,6 +49,29 @@
   background: rgba(225, 6, 0, 0.2);
   border-color: rgba(225, 6, 0, 0.4);
   color: #fafafa;
+}
+
+.app-header-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #e10600;
+  color: white;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border: 2px solid #141416;
+}
+
+.app-header-badge.hidden {
+  display: none;
 }
 
 .app-screen-container {
@@ -805,4 +829,386 @@
 .drop-counter b {
   color: #fafafa;
   font-family: var(--font-mono);
-} 
+}
+
+/* ═══ PVP ═══ */
+
+.pvp-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  margin-top: 12px;
+}
+
+.pvp-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border: none;
+  border-radius: 10px;
+  font-family: var(--font-head);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: #fafafa;
+}
+
+.pvp-btn.primary {
+  background: #e10600;
+  color: white;
+}
+
+.pvp-btn.primary:active {
+  background: #ff1801;
+  transform: scale(0.98);
+}
+
+.pvp-btn.default {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pvp-btn.default:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.pvp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pvp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 60px 20px;
+  color: rgba(255, 255, 255, 0.3);
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.pvp-battle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  border-left: 3px solid rgba(255, 255, 255, 0.1);
+}
+
+.pvp-battle.incoming {
+  border-left-color: #e10600;
+  background: rgba(225, 6, 0, 0.05);
+}
+
+.pvp-battle.outgoing {
+  border-left-color: #60a5fa;
+  background: rgba(96, 165, 250, 0.05);
+}
+
+.pvp-battle-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pvp-battle-title {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: #fafafa;
+  margin-bottom: 4px;
+}
+
+.pvp-battle-title b {
+  font-family: var(--font-head);
+}
+
+.pvp-battle-meta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.pvp-battle-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.pvp-mini-btn {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pvp-mini-btn.primary {
+  background: #e10600;
+  color: white;
+}
+
+.pvp-mini-btn.primary:active {
+  background: #ff1801;
+}
+
+.pvp-mini-btn.default {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fafafa;
+}
+
+.pvp-mini-btn.default:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.pvp-mini-btn.danger {
+  background: transparent;
+  border: 1px solid #ef4444;
+  color: #ef4444;
+}
+
+.pvp-status {
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 8px 0 12px;
+}
+
+.pvp-status b {
+  color: #fafafa;
+  font-family: var(--font-mono);
+}
+
+.pvp-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 4px;
+  margin-bottom: 8px;
+}
+
+.pvp-card {
+  background: rgba(20, 20, 22, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.pvp-card:active {
+  transform: scale(0.96);
+}
+
+.pvp-card.chosen {
+  border-color: #28c840;
+  box-shadow: 0 0 12px rgba(40, 200, 64, 0.4);
+}
+
+.pvp-card.legendary { border-color: #fbbf24; }
+.pvp-card.limited { border-color: #ef4444; }
+.pvp-card.mythic { border-color: #f97316; }
+.pvp-card.epic { border-color: #8b5cf6; }
+.pvp-card.rare { border-color: #28c840; }
+
+.pvp-card-img {
+  height: 70px;
+  background: #0a0a0a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.pvp-card-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.pvp-card-check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  background: #28c840;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pvp-card-name {
+  font-family: var(--font-body);
+  font-size: 10px;
+  color: #fafafa;
+  padding: 4px 6px 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pvp-card-price {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 0 6px 4px;
+}
+
+/* ═══ MARKET ═══ */
+
+.market-buy-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(225, 6, 0, 0.9);
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  z-index: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.market-limit {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.35);
+  margin-top: 4px;
+}
+
+/* ═══ BANK ═══ */
+
+.bank-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.bank-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  border: none;
+  border-radius: 10px;
+  font-family: var(--font-head);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: #fafafa;
+}
+
+.bank-btn.primary {
+  background: #e10600;
+  color: white;
+}
+
+.bank-btn.primary:active {
+  background: #ff1801;
+  transform: scale(0.98);
+}
+
+.bank-warning {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border-left: 3px solid #ef4444;
+  border-radius: 6px;
+  color: #ef4444;
+  font-family: var(--font-body);
+  font-size: 12px;
+}
+
+/* ═══ SHOP ═══ */
+
+.shop-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.shop-btn {
+  padding: 12px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fafafa;
+  font-family: var(--font-head);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.shop-btn:active {
+  background: rgba(225, 6, 0, 0.2);
+  border-color: rgba(225, 6, 0, 0.4);
+}
+
+.shop-btn.primary {
+  background: #e10600;
+  color: white;
+  border-color: #e10600;
+  grid-column: 1 / -1;
+}
+
+.shop-btn.primary:active {
+  background: #ff1801;
+}
+
+.shop-plus-info {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.6;
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: rgba(212, 160, 23, 0.08);
+  border-radius: 6px;
+  border-left: 3px solid #d4a017;
+}
+
+.shop-attempts-left {
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 12px;
+}
+
+.shop-attempts-left b {
+  color: #fafafa;
+  font-family: var(--font-mono);
+    } 
