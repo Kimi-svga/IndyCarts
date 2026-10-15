@@ -25,6 +25,12 @@ from core.constants import (
 )
 from db.models import Card, User, UserCard
 from db.session import AsyncSessionLocal
+from services.notifications import (
+    clear_user_notifications,
+    get_unread_count,
+    get_user_notifications,
+    mark_read,
+)
 
 router = APIRouter(prefix="/api", tags=["api"])
 
@@ -1529,6 +1535,66 @@ async def auction_buyout(
         await session.commit()
 
     return {"ok": True, "price": lot.buyout_price}
+
+
+# ═════════════════════════════════════════════
+# NOTIFICATIONS (для Visual Merge)
+# ═════════════════════════════════════════════
+
+class MarkReadRequest(BaseModel):
+    notification_id: int
+
+
+@router.get("/notifications")
+async def get_notifications(user: User = Depends(get_current_user)):
+    """
+    Последние уведомления игрока.
+
+    Возвращает:
+      items[]  — список уведомлений (до 30)
+      unread   — количество непрочитанных
+    """
+    items = await get_user_notifications(user.id, limit=30)
+    unread = await get_unread_count(user.id)
+
+    return {
+        "items": [
+            {
+                "id": n.id,
+                "type": n.type,
+                "title": n.title,
+                "text": n.text,
+                "icon": n.icon,
+                "color": n.color,
+                "payload": n.payload,
+                "is_read": n.is_read,
+                "created_at": n.created_at.isoformat(),
+            }
+            for n in items
+        ],
+        "unread": unread,
+    }
+
+
+@router.post("/notifications/read")
+async def read_notification(
+    payload: MarkReadRequest,
+    user: User = Depends(get_current_user),
+):
+    """Помечает одно уведомление прочитанным."""
+    ok = await mark_read(user.id, payload.notification_id)
+    if not ok:
+        raise HTTPException(404, "Уведомление не найдено")
+
+    unread = await get_unread_count(user.id)
+    return {"ok": True, "unread": unread}
+
+
+@router.delete("/notifications/clear")
+async def clear_notifications(user: User = Depends(get_current_user)):
+    """Удаляет все уведомления игрока."""
+    deleted = await clear_user_notifications(user.id)
+    return {"ok": True, "deleted": deleted, "unread": 0}
 
 
 # ═════════════════════════════════════════════
