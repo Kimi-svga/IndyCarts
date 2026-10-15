@@ -62,19 +62,15 @@ export function showPush(
     el.classList.add('visible');
   });
 
-  // Клик → открыть sheet
-  el.addEventListener('click', () => {
-    if (onClick) onClick();
-    dismiss();
-  });
-
-  // Свайп вверх
+  // Свайп вверх + тап
   let startY = 0;
   let moved = false;
+
   el.addEventListener('touchstart', (e) => {
     startY = e.touches[0].clientY;
     moved = false;
   });
+
   el.addEventListener('touchmove', (e) => {
     const dy = e.touches[0].clientY - startY;
     if (dy < -10) {
@@ -83,6 +79,7 @@ export function showPush(
       el.style.opacity = String(Math.max(0, 1 + dy / 100));
     }
   });
+
   el.addEventListener('touchend', (e) => {
     const dy = e.changedTouches[0].clientY - startY;
     if (dy < -40) {
@@ -91,6 +88,18 @@ export function showPush(
       el.style.transform = '';
       el.style.opacity = '';
     }
+  });
+
+  // Клик — только если НЕ свайпали
+  el.addEventListener('click', (e) => {
+    if (moved) {
+      e.preventDefault();
+      e.stopPropagation();
+      moved = false;
+      return;
+    }
+    if (onClick) onClick();
+    dismiss();
   });
 
   // Автозакрытие
@@ -113,4 +122,4 @@ function escapeHtml(text: string): string {
 
 function escapeAttr(text: string): string {
   return text.replace(/[^a-z0-9-]/gi, '');
-} 
+  } 
