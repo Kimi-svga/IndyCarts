@@ -7,12 +7,14 @@ import './styles/global.css';
 import './styles/terminal.css';
 import './styles/app.css';
 import './styles/settings.css';
+import './styles/notifications.css';
 
 import { Terminal } from '@/core/terminal';
 import { authenticate } from '@/api/auth';
 import { createApiRepo } from '@/api/repo';
 import { apiFetch } from '@/api/client';
 import { applySettings, loadSettings } from '@/settings/store';
+import { startNotificationPolling } from '@/ui/components/notifications';
 
 import { Router } from '@/ui/router';
 import { createHeader } from '@/ui/components/header';
@@ -198,6 +200,9 @@ router.register('plus', (el) => {
     });
 
     (window as unknown as { __vm_terminal?: Terminal }).__vm_terminal = globalTerminal;
+
+    // ─── Запуск polling уведомлений ───
+    startNotificationPolling(30000);
   }
 
   await router.navigate('menu');
