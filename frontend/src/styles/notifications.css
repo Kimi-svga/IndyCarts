@@ -1,0 +1,602 @@
+/**
+ * Visual Merge — уведомления.
+ * iOS-стиль + Liquid Glass.
+ * Design by Expo
+ */
+
+/* ═══════════════════════════════════════════
+   КОЛОКОЛЬЧИК В ШАПКЕ
+   ═══════════════════════════════════════════ */
+
+.app-header-btn.notif-btn {
+  position: relative;
+  transition: all var(--transition);
+}
+
+.app-header-btn.notif-btn.has-unread {
+  color: var(--accent);
+}
+
+.app-header-btn.notif-btn.shake {
+  animation: bellShake 0.8s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes bellShake {
+  0%, 100% { transform: rotate(0); }
+  10%      { transform: rotate(15deg); }
+  20%      { transform: rotate(-15deg); }
+  30%      { transform: rotate(10deg); }
+  40%      { transform: rotate(-10deg); }
+  50%      { transform: rotate(6deg); }
+  60%      { transform: rotate(-6deg); }
+  70%      { transform: rotate(3deg); }
+  80%      { transform: rotate(-3deg); }
+  90%      { transform: rotate(1deg); }
+}
+
+/* Красная точка */
+.app-header-btn.notif-btn .notif-dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #ff3b30 0%, #dc2626 100%);
+  border: 2px solid var(--bg);
+  box-shadow:
+    0 2px 8px rgba(239, 68, 68, 0.5),
+    0 0 0 0 rgba(239, 68, 68, 0.4);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  animation: dotPulse 2s ease-in-out infinite;
+}
+
+.app-header-btn.notif-btn .notif-dot.hidden {
+  display: none;
+}
+
+.app-header-btn.notif-btn .notif-dot.just-arrived {
+  animation: dotBurst 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes dotPulse {
+  0%, 100% {
+    box-shadow:
+      0 2px 8px rgba(239, 68, 68, 0.5),
+      0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow:
+      0 2px 8px rgba(239, 68, 68, 0.7),
+      0 0 0 8px rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes dotBurst {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.4); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+
+/* ═══════════════════════════════════════════
+   PUSH-БАННЕР (iOS-style + Liquid Glass)
+   ═══════════════════════════════════════════ */
+
+#push-container {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top));
+  left: 8px;
+  right: 8px;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.push-banner {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+
+  /* Liquid Glass */
+  background: rgba(28, 28, 30, 0.72);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.45),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+
+  transform: translateY(-120%) scale(0.95);
+  opacity: 0;
+  transition:
+    transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.25s ease;
+}
+
+/* Световой блик сверху */
+.push-banner::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    transparent 100%
+  );
+  pointer-events: none;
+  border-radius: 18px 18px 0 0;
+}
+
+.push-banner.visible {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.push-banner.dismissing {
+  transform: translateY(-120%) scale(0.95);
+  opacity: 0;
+}
+
+.push-icon {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.push-icon iconify-icon {
+  filter: drop-shadow(0 0 8px currentColor);
+}
+
+.push-body {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.push-title {
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.push-text {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.push-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-mute);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+
+/* ═══════════════════════════════════════════
+   BOTTOM-SHEET (Liquid Glass)
+   ═══════════════════════════════════════════ */
+
+.notif-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8000;
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px) saturate(120%);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.notif-overlay.visible {
+  display: flex;
+  opacity: 1;
+}
+
+.notif-sheet {
+  width: 100%;
+  max-width: 600px;
+  max-height: 82vh;
+  overflow-y: auto;
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
+  position: relative;
+
+  /* Liquid Glass */
+  background: rgba(20, 20, 22, 0.82);
+  backdrop-filter: blur(60px) saturate(180%);
+  -webkit-backdrop-filter: blur(60px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-bottom: none;
+  border-radius: 24px 24px 0 0;
+  box-shadow:
+    0 -12px 60px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+
+  transform: translateY(100%);
+  animation: notifSheetIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Световой блик сверху sheet */
+.notif-sheet::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    transparent 100%
+  );
+  pointer-events: none;
+  border-radius: 24px 24px 0 0;
+}
+
+@keyframes notifSheetIn {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+.notif-handle {
+  width: 40px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.20);
+  border-radius: 2px;
+  margin: 8px auto 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+
+/* ═══════════════════════════════════════════
+   ЗАГОЛОВОК SHEET
+   ═══════════════════════════════════════════ */
+
+.notif-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.notif-header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text);
+  text-transform: uppercase;
+}
+
+.notif-header-title iconify-icon {
+  color: var(--accent);
+  filter: drop-shadow(0 0 8px var(--accent));
+}
+
+.notif-clear-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-mute);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 8px;
+  transition: all var(--transition);
+}
+
+.notif-clear-btn:active {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+
+/* ═══════════════════════════════════════════
+   КАРТОЧКА УВЕДОМЛЕНИЯ (Liquid Glass)
+   ═══════════════════════════════════════════ */
+
+.notif-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 14px 14px 16px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    opacity 0.25s ease,
+    background 0.2s ease;
+
+  /* Liquid Glass */
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(15px) saturate(150%);
+  -webkit-backdrop-filter: blur(15px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+
+  animation: notifItemIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+
+.notif-item:nth-child(1) { animation-delay: 0.05s; }
+.notif-item:nth-child(2) { animation-delay: 0.10s; }
+.notif-item:nth-child(3) { animation-delay: 0.15s; }
+.notif-item:nth-child(4) { animation-delay: 0.20s; }
+.notif-item:nth-child(5) { animation-delay: 0.25s; }
+
+@keyframes notifItemIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.notif-item:active {
+  transform: scale(0.98);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Прочитанное */
+.notif-item.read {
+  opacity: 0.45;
+}
+
+.notif-item.read .notif-item-bar {
+  opacity: 0.3;
+}
+
+/* Цветная полоска слева — градиент */
+.notif-item-bar {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  box-shadow:
+    0 0 8px currentColor,
+    0 0 2px currentColor;
+  transition: opacity 0.25s ease;
+}
+
+/* Иконка */
+.notif-item-icon {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.notif-item-icon::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+.notif-item-icon iconify-icon {
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+/* Тело */
+.notif-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.notif-item-title {
+  font-family: var(--font-head);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.notif-item-text {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.notif-item-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-mute);
+  margin-top: 4px;
+}
+
+
+/* ═══════════════════════════════════════════
+   ПУСТОЕ СОСТОЯНИЕ
+   ═══════════════════════════════════════════ */
+
+.notif-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: 12px;
+  text-align: center;
+}
+
+.notif-empty iconify-icon {
+  color: var(--text-mute);
+  opacity: 0.4;
+}
+
+.notif-empty-text {
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text);
+  text-transform: uppercase;
+}
+
+.notif-empty-sub {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+
+/* ═══════════════════════════════════════════
+   ЦВЕТА ТИПОВ (для полоски и иконки)
+   ═══════════════════════════════════════════ */
+
+.notif-type-broadcast { color: #3b82f6; }
+.notif-type-broadcast .notif-item-bar {
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.notif-type-pvp { color: #f97316; }
+.notif-type-pvp .notif-item-bar {
+  background: linear-gradient(180deg, #f97316 0%, #ea580c 100%);
+}
+
+.notif-type-trade { color: #8b5cf6; }
+.notif-type-trade .notif-item-bar {
+  background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
+}
+
+.notif-type-clan { color: #fbbf24; }
+.notif-type-clan .notif-item-bar {
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+}
+
+.notif-type-auction { color: #d4a017; }
+.notif-type-auction .notif-item-bar {
+  background: linear-gradient(180deg, #d4a017 0%, #a16207 100%);
+}
+
+.notif-type-support { color: #28c840; }
+.notif-type-support .notif-item-bar {
+  background: linear-gradient(180deg, #28c840 0%, #16a34a 100%);
+}
+
+.notif-type-system { color: #ef4444; }
+.notif-type-system .notif-item-bar {
+  background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+}
+
+
+/* ═══════════════════════════════════════════
+   iOS SAFE AREA
+   ═══════════════════════════════════════════ */
+
+@supports (padding-top: env(safe-area-inset-top)) {
+  #push-container {
+    top: calc(8px + env(safe-area-inset-top));
+  }
+}
+
+
+/* ═══════════════════════════════════════════
+   ОТКЛЮЧЕНИЕ АНИМАЦИЙ
+   ═══════════════════════════════════════════ */
+
+html[data-animations="off"] .push-banner,
+html[data-animations="off"] .notif-item,
+html[data-animations="off"] .notif-sheet,
+html[data-animations="off"] .notif-dot,
+html[data-animations="off"] .notif-btn {
+  animation: none !important;
+  transition: none !important;
+  } 
