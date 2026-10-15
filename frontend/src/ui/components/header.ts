@@ -1,9 +1,10 @@
 /**
- * Header — логотип + шестерёнка настроек + терминал.
+ * Header — логотип + уведомления + шестерёнка настроек + терминал.
  */
 
 import type { Router } from '../router';
 import { SettingsModal } from '@/settings/modal';
+import { openNotificationsSheet } from './notifications';
 
 export function createHeader(router: Router): HTMLElement {
   const header = document.createElement('div');
@@ -13,6 +14,10 @@ export function createHeader(router: Router): HTMLElement {
     <div class="app-header-title">
       VISUAL <span>MERGE</span>
     </div>
+    <button class="app-header-btn notif-btn" data-action="notifications" title="Уведомления">
+      <iconify-icon icon="lucide:bell" width="18" height="18"></iconify-icon>
+      <span class="notif-dot hidden" id="notif-dot">0</span>
+    </button>
     <button class="app-header-btn" data-action="settings" title="Настройки">
       <iconify-icon icon="lucide:settings" width="18" height="18"></iconify-icon>
     </button>
@@ -22,6 +27,12 @@ export function createHeader(router: Router): HTMLElement {
   `;
 
   const modal = new SettingsModal();
+
+  header
+    .querySelector('[data-action="notifications"]')
+    ?.addEventListener('click', () => {
+      void openNotificationsSheet();
+    });
 
   header
     .querySelector('[data-action="settings"]')
@@ -36,4 +47,4 @@ export function createHeader(router: Router): HTMLElement {
     });
 
   return header;
-      } 
+    } 
