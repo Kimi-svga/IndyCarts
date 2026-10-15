@@ -698,3 +698,30 @@ class ClanInvite(Base):
     __table_args__ = (
         UniqueConstraint("clan_id", "to_user_id", "status", name="uq_clan_invite_pending"),
     )
+# ═════════════════════════════════════════════
+# NOTIFICATIONS (Visual Merge push)
+# ═════════════════════════════════════════════
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(128), nullable=False)
+    text: Mapped[str] = mapped_column(String(512), nullable=False)
+    icon: Mapped[str] = mapped_column(String(32), default="bell")
+    color: Mapped[str] = mapped_column(String(16), default="blue")
+
+    payload: Mapped[str | None] = mapped_column(String(256), nullable=True)
+
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), index=True,
+    )  
