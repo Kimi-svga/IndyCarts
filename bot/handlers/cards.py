@@ -1,6 +1,6 @@
-"""Обработчики карт: коллекция, дроп, трейды, продажа, слияние."""
+"""Обработчики карт: коллекция, дроп, трейды, продажа, слияние, чеклист."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -10,7 +10,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy import func, select
 
 from bot.keyboards.cards import (
-    CardsFilter, CardsMenu, get_cards_menu, get_filter_menu, get_merge_menu,
+    CardsFilter, CardsMenu, FullCollectionCD,
+    get_cards_menu, get_filter_menu, get_full_collection_menu, get_merge_menu,
 )
 from bot.keyboards.main import MainMenu
 from bot.utils.stable import safe_answer, safe_render
@@ -25,6 +26,8 @@ from services.merge import merge_cards
 from services.stats import format_ownership, get_ownership, get_rarest_cards
 
 router = Router()
+
+CARDS_PER_PAGE = 10
 
 
 class TradeState(StatesGroup):
@@ -578,7 +581,6 @@ async def cb_drop(query: CallbackQuery) -> None:
 
         await session.commit()
 
-        # Ownership после дропа
         ownership = await get_ownership(session, card.id)
 
         remaining = user.daily_attempts
@@ -667,6 +669,131 @@ async def cb_merge(query: CallbackQuery) -> None:
             f"✅ <b>Успех!</b>\n\nПолучена: {RARITY_NAMES[result.result]}\n{result.card_name}",
             get_merge_menu(),
         )
+
+
+# ═════════════════════════════════════════════
+# ЧЕКЛИСТ «ВСЕ КАРТЫ»
+# ═════════════════════════════════════════════
+
+async def _get_full_collection(user_id: int, rarity: str = "all") -> list:
+    """Все активные карты + количество у игрока."""
+    async with AsyncSessionLocal() as session:
+        stmt = (
+            select(
+                Card,
+                func.count(UserCard.id).label("count"),
+            )
+            .outerjoin(
+                UserCard,
+                (UserCard.card_id == Card.id) & (UserCard.user_id == user_id),
+            )
+            .where(Card.is_active == True)
+            .group_by(Card.id)
+            .order_by(Card.rarity, Card.name)
+        )
+        if rarity != "all":
+            stmt = stmt.where(Card.rarity == rarity)
+
+        return (await session.execute(stmt)).all()
+
+
+def _render_full_collection(
+    rows: list,
+    rarity: str,
+    page: int,
+):
+    """Собирает текст и клавиатуру для страницы чеклиста."""
+    total = len(rows)
+    owned = sum(1 for _, cnt in rows if cnt > 0)
+    percent = int((owned / total * 100) if total else 0)
+
+    total_pages = max(1, (total + CARDS_PER_PAGE - 1) // CARDS_PER_PAGE)
+    page = max(0, min(page, total_pages - 1))
+
+    start = page * CARDS_PER_PAGE
+    end = start + CARDS_PER_PAGE
+    page_rows = rows[start:end]
+
+    text = (
+        f"📚 <b>Все карты</b>\n\n"
+        f"✅ Собрано: <b>{owned}</b> / {total} ({percent}%)\n"
+        f"📖 Страница {page + 1}/{total_pages}\n\n"
+    )
+
+    for card, count in page_rows:
+        mark = "✅" if count > 0 else "❌"
+        count_text = f" ×{count}" if count > 1 else ""
+        rarity_name = RARITY_NAMES.get(card.rarity, card.rarity)
+        text += f"{mark} <b>{card.name}</b> — {rarity_name}{count_text}\n"
+
+    markup = get_full_collection_menu(rarity, page, total_pages)
+    return text, markup
+
+
+@router.callback_query(CardsMenu.filter(F.action == "full"))
+async def cb_full_collection(query: CallbackQuery) -> None:
+    """Открывает чеклист всех карт."""
+    await safe_answer(query)
+
+    async with AsyncSessionLocal() as session:
+        user = (await session.execute(
+            select(User).where(User.telegram_id == query.from_user.id)
+        )).scalar_one_or_none()
+
+        if user is None:
+            await safe_render(query, "❌ Сначала /start", get_cards_menu())
+            return
+        user_id = user.id
+
+    rows = await _get_full_collection(user_id, "all")
+
+    if not rows:
+        await safe_render(
+            query,
+            "📚 <b>В игре пока нет карт</b>",
+            get_cards_menu(),
+        )
+        return
+
+    text, markup = _render_full_collection(rows, "all", 0)
+    await safe_render(query, text, markup)
+
+
+@router.callback_query(FullCollectionCD.filter())
+async def cb_full_collection_nav(
+    query: CallbackQuery,
+    callback_data: FullCollectionCD,
+) -> None:
+    """Навигация и фильтр в чеклисте."""
+    await safe_answer(query)
+
+    async with AsyncSessionLocal() as session:
+        user = (await session.execute(
+            select(User).where(User.telegram_id == query.from_user.id)
+        )).scalar_one_or_none()
+
+        if user is None:
+            return
+        user_id = user.id
+
+    rarity = callback_data.rarity
+    page = callback_data.page
+
+    if callback_data.action == "filter":
+        page = 0
+
+    rows = await _get_full_collection(user_id, rarity)
+
+    if not rows:
+        await safe_render(
+            query,
+            f"📚 <b>Нет карт</b> ({RARITY_NAMES.get(rarity, 'Все')})",
+            get_full_collection_menu(rarity, 0, 1),
+        )
+        return
+
+    text, markup = _render_full_collection(rows, rarity, page)
+    await safe_render(query, text, markup)
 
 
 # ═════════════════════════════════════════════
