@@ -15,7 +15,6 @@ class MainMenu(CallbackData, prefix="menu"):
 def get_main_menu(is_owner: bool = False) -> InlineKeyboardMarkup:
     """
     Главное меню — только кнопки.
-
     Текст инфо-панели рендерится отдельно
     через bot.utils.main_menu.build_main_menu_text().
     """
@@ -23,12 +22,15 @@ def get_main_menu(is_owner: bool = False) -> InlineKeyboardMarkup:
 
     for label, action in MAIN_MENU_BUTTONS:
         b.button(text=label, callback_data=MainMenu(action=action))
+        
+    # Добавляем кубик
+    b.button(text="🎲 Кубик", callback_data=MainMenu(action="dice"))
 
     if is_owner:
         b.button(text="👑 Панель", callback_data=MainMenu(action="admin_panel"))
-        b.adjust(3, 3, 3, 1)
+        b.adjust(3, 3, 3, 3, 2) 
     else:
-        b.adjust(3, 3, 3)
+        b.adjust(3, 3, 3, 3, 1)
 
     return b.as_markup()
 
