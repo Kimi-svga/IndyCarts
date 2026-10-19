@@ -30,6 +30,10 @@ class User(Base):
 
     daily_streak: Mapped[int] = mapped_column(Integer, default=0)
     last_daily_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    
+    # --- ДОБАВЛЕНО ДЛЯ КУБИКА ---
+    last_dice_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # ----------------------------
 
     pvp_wins: Mapped[int] = mapped_column(Integer, default=0)
     pvp_losses: Mapped[int] = mapped_column(Integer, default=0)
@@ -698,6 +702,7 @@ class ClanInvite(Base):
     __table_args__ = (
         UniqueConstraint("clan_id", "to_user_id", "status", name="uq_clan_invite_pending"),
     )
+
 # ═════════════════════════════════════════════
 # NOTIFICATIONS (Visual Merge push)
 # ═════════════════════════════════════════════
@@ -724,4 +729,4 @@ class Notification(Base):
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), index=True,
-    )  
+)
