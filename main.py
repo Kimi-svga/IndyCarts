@@ -16,9 +16,9 @@ from sqlalchemy import func, select
 
 from bot.handlers import (
     admin, admin_bans, admin_broadcast, admin_cards, admin_tools,
-    auction, bank, cards, clan, daily, friends, help, market, menu, plus,
+    auction, bank, cards, clan, daily, friends, group, help, market, menu, plus,
     profile, promo, pvp, rating, ref, roles, shop, start, stats,
-    support, support_panel, trade, dice, # <-- Добавлен dice
+    support, support_panel, trade, dice,
 )
 from bot.middlewares.ban import BanMiddleware
 from bot.middlewares.last_seen import LastSeenMiddleware
@@ -64,7 +64,8 @@ for r in (
     friends, trade, auction,
     menu,
     clan,
-    dice, # <-- Добавлен dice
+    dice,
+    group, # <-- Добавлен роутер групповых команд
 ):
     dp.include_router(r.router)
 
@@ -811,4 +812,4 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=settings.PORT) 
+    uvicorn.run(app, host="0.0.0.0", port=settings.PORT)
