@@ -35,7 +35,6 @@ class User(Base):
     daily_streak: Mapped[int] = mapped_column(Integer, default=0)
     last_daily_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     
-    # Кубик (Дайс)
     last_dice_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     pvp_wins: Mapped[int] = mapped_column(Integer, default=0)
@@ -79,7 +78,6 @@ class User(Base):
     last_creator_card_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     creator_title: Mapped[str | None] = mapped_column(String(32), nullable=True)
     
-    # Кастомный титул (Бейджи)
     custom_title: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
@@ -130,7 +128,6 @@ class Card(Base):
     is_creator_card: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     creator_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
 
-    # Тонкая настройка
     is_sellable: Mapped[bool] = mapped_column(Boolean, default=True)
     is_tradeable: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -184,6 +181,31 @@ class CraftRecipe(Base):
     ingredients: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+# ═════════════════════════════════════════════
+# БЕЙДЖИ
+# ═════════════════════════════════════════════
+
+class Badge(Base):
+    __tablename__ = "badges"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    icon: Mapped[str] = mapped_column(String(16), nullable=False)
+    description: Mapped[str] = mapped_column(String(256), nullable=False)
+
+
+class UserBadge(Base):
+    __tablename__ = "user_badges"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    badge_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("badges.id", ondelete="CASCADE"), nullable=False, index=True)
+    awarded_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("user_id", "badge_id", name="uq_user_badge"),)
 
 
 # ═════════════════════════════════════════════
