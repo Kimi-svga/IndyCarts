@@ -13,6 +13,10 @@ class Base(DeclarativeBase):
     pass
 
 
+# ═════════════════════════════════════════════
+# ПОЛЬЗОВАТЕЛИ
+# ═════════════════════════════════════════════
+
 class User(Base):
     __tablename__ = "users"
 
@@ -31,9 +35,8 @@ class User(Base):
     daily_streak: Mapped[int] = mapped_column(Integer, default=0)
     last_daily_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     
-    # --- ДОБАВЛЕНО ДЛЯ КУБИКА ---
+    # Кубик (Дайс)
     last_dice_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    # ----------------------------
 
     pvp_wins: Mapped[int] = mapped_column(Integer, default=0)
     pvp_losses: Mapped[int] = mapped_column(Integer, default=0)
@@ -75,6 +78,9 @@ class User(Base):
     creator_cards_today: Mapped[int] = mapped_column(Integer, default=0)
     last_creator_card_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     creator_title: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    
+    # Кастомный титул (Бейджи)
+    custom_title: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
@@ -86,6 +92,10 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
 
+
+# ═════════════════════════════════════════════
+# КАРТЫ И КОЛЛЕКЦИИ
+# ═════════════════════════════════════════════
 
 class Collection(Base):
     __tablename__ = "collections"
@@ -119,6 +129,10 @@ class Card(Base):
     is_plus_only: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_creator_card: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     creator_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
+
+    # Тонкая настройка
+    is_sellable: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_tradeable: Mapped[bool] = mapped_column(Boolean, default=True)
 
     collection_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("collections.id", ondelete="SET NULL"),
@@ -156,6 +170,26 @@ class PriceHistory(Base):
     recorded_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
 
+# ═════════════════════════════════════════════
+# КРАФТ
+# ═════════════════════════════════════════════
+
+class CraftRecipe(Base):
+    __tablename__ = "craft_recipes"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    result_card_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("cards.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    ingredients: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+# ═════════════════════════════════════════════
+# PVP
+# ═════════════════════════════════════════════
+
 class PvpBattle(Base):
     __tablename__ = "pvp_battles"
 
@@ -185,6 +219,8 @@ class PvpStake(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     user_card_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("user_cards.id"), nullable=False)
     side: Mapped[str] = mapped_column(String(16))
+
+    __table_args__ = (UniqueConstraint("battle_id", "user_card_id", name="uq_pvp_stake_card"),)
 
 
 class PvpSeason(Base):
@@ -227,6 +263,10 @@ class UserSeasonStat(Base):
 
     __table_args__ = (UniqueConstraint("user_id", "season_id", name="uq_user_season"),)
 
+
+# ═════════════════════════════════════════════
+# ЕЖЕДНЕВКИ, ПРОМО, НАГРАДЫ
+# ═════════════════════════════════════════════
 
 class DailyReward(Base):
     __tablename__ = "daily_rewards"
@@ -287,6 +327,10 @@ class PvpReward(Base):
     reward_card_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cards.id"), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
+
+# ═════════════════════════════════════════════
+# АДМИНКА И БАНЫ
+# ═════════════════════════════════════════════
 
 class AdminRole(Base):
     __tablename__ = "admin_roles"
@@ -359,6 +403,10 @@ class Referral(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+# ═════════════════════════════════════════════
+# ПОДПИСКИ (INDY+)
+# ═════════════════════════════════════════════
+
 class Subscription(Base):
     __tablename__ = "subscriptions"
 
@@ -403,6 +451,10 @@ class PlusReward(Base):
     is_claimed: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+# ═════════════════════════════════════════════
+# БАНК (КРЕДИТЫ)
+# ═════════════════════════════════════════════
+
 class Loan(Base):
     __tablename__ = "loans"
 
@@ -427,6 +479,10 @@ class LoanPayment(Base):
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     paid_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
+
+# ═════════════════════════════════════════════
+# ПОДДЕРЖКА (ТИКЕТЫ)
+# ═════════════════════════════════════════════
 
 class Ticket(Base):
     __tablename__ = "tickets"
@@ -454,6 +510,10 @@ class TicketMessage(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
+
+# ═════════════════════════════════════════════
+# ДРУЗЬЯ И ОБМЕН
+# ═════════════════════════════════════════════
 
 class Friend(Base):
     __tablename__ = "friends"
@@ -497,6 +557,10 @@ class Trade(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+# ═════════════════════════════════════════════
+# АУКЦИОН
+# ═════════════════════════════════════════════
+
 class Auction(Base):
     __tablename__ = "auctions"
 
@@ -527,6 +591,10 @@ class AuctionBid(Base):
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
+
+# ═════════════════════════════════════════════
+# ИВЕНТЫ И КРЕАТОР-КАРТЫ
+# ═════════════════════════════════════════════
 
 class Event(Base):
     __tablename__ = "events"
@@ -608,7 +676,7 @@ class RoyaltyPayout(Base):
 
 
 # ═════════════════════════════════════════════
-# CLANS (v1.5.0)
+# КЛАНЫ (v1.5.0)
 # ═════════════════════════════════════════════
 
 class Clan(Base):
@@ -703,8 +771,9 @@ class ClanInvite(Base):
         UniqueConstraint("clan_id", "to_user_id", "status", name="uq_clan_invite_pending"),
     )
 
+
 # ═════════════════════════════════════════════
-# NOTIFICATIONS (Visual Merge push)
+# УВЕДОМЛЕНИЯ
 # ═════════════════════════════════════════════
 
 class Notification(Base):
@@ -729,4 +798,4 @@ class Notification(Base):
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), index=True,
-)
+    )
