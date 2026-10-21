@@ -8,9 +8,9 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy import delete, func, select
 
 from bot.keyboards.admin_cards import (
-    ACard, attach_card_list_nav, get_card_editor, get_collection_menu,
-    get_delete_confirm, get_price_menu, get_rarity_menu, get_team_menu,
-    get_year_menu,
+    ACard, attach_card_list_nav, get_card_editor, get_card_settings_menu,
+    get_collection_menu, get_delete_confirm, get_price_menu, get_rarity_menu,
+    get_team_menu, get_year_menu,
 )
 from bot.keyboards.main import get_back_menu
 from bot.utils.decorators import check_role
@@ -719,6 +719,75 @@ async def handle_search(message: Message, state: FSMContext) -> None:
     )
 
 
+# ═════════════════════════════════════════════
+# ТОНКАЯ НАСТРОЙКА (НОВОЕ)
+# ═════════════════════════════════════════════
+
+@router.callback_query(ACard.filter(F.action == "edit_settings"))
+async def cb_card_settings(query: CallbackQuery, callback_data: ACard) -> None:
+    if not await check_role(query.from_user.id, "admin"):
+        return
+    await safe_answer(query)
+
+    async with AsyncSessionLocal() as session:
+        card = await session.get(Card, callback_data.card_id)
+        if card is None:
+            return
+
+        text = (
+            f"⚙️ <b>Настройки карты</b>\n\n"
+            f"🃏 {card.name}\n\n"
+            f"Здесь ты можешь запретить продажу или передачу этой карты (например, для ивентовых наград)."
+        )
+        markup = get_card_settings_menu(card.id, card.is_sellable, card.is_tradeable)
+
+    await safe_render(query, text, markup)
+
+
+@router.callback_query(ACard.filter(F.action == "toggle_sell"))
+async def cb_toggle_sell(query: CallbackQuery, callback_data: ACard) -> None:
+    if not await check_role(query.from_user.id, "admin"):
+        return
+    await safe_answer(query)
+
+    async with AsyncSessionLocal() as session:
+        card = await session.get(Card, callback_data.card_id)
+        if card:
+            card.is_sellable = not card.is_sellable
+            await session.commit()
+            is_sellable = card.is_sellable
+            is_tradeable = card.is_tradeable
+        else:
+            return
+
+    markup = get_card_settings_menu(callback_data.card_id, is_sellable, is_tradeable)
+    await query.message.edit_reply_markup(reply_markup=markup)
+
+
+@router.callback_query(ACard.filter(F.action == "toggle_trade"))
+async def cb_toggle_trade(query: CallbackQuery, callback_data: ACard) -> None:
+    if not await check_role(query.from_user.id, "admin"):
+        return
+    await safe_answer(query)
+
+    async with AsyncSessionLocal() as session:
+        card = await session.get(Card, callback_data.card_id)
+        if card:
+            card.is_tradeable = not card.is_tradeable
+            await session.commit()
+            is_sellable = card.is_sellable
+            is_tradeable = card.is_tradeable
+        else:
+            return
+
+    markup = get_card_settings_menu(callback_data.card_id, is_sellable, is_tradeable)
+    await query.message.edit_reply_markup(reply_markup=markup)
+
+
+# ═════════════════════════════════════════════
+# СЛУЖЕБНЫЙ
+# ═════════════════════════════════════════════
+
 @router.callback_query(F.data == "noop")
 async def cb_noop(query: CallbackQuery) -> None:
-    await safe_answer(query)
+    await safe_answer(query) 
