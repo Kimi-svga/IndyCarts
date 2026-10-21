@@ -25,11 +25,30 @@ def get_card_editor(card_id: int, in_drop: bool = True) -> InlineKeyboardMarkup:
     b.button(text="⚖️ Вес дропа", callback_data=ACard(action="edit_weight", card_id=card_id).pack())
     b.button(text="📜 Тираж", callback_data=ACard(action="edit_supply", card_id=card_id).pack())
     b.button(text="📁 Коллекция", callback_data=ACard(action="edit_collection", card_id=card_id).pack())
+    
+    # НОВАЯ КНОПКА ТОНКОЙ НАСТРОЙКИ
+    b.button(text="⚙️ Тонкая настройка", callback_data=ACard(action="edit_settings", card_id=card_id).pack())
+    
     drop_text = "🔄 Убрать из дропа" if in_drop else "▶️ Вернуть в дроп"
     b.button(text=drop_text, callback_data=ACard(action="toggle_drop", card_id=card_id).pack())
     b.button(text="❌ Удалить карту", callback_data=ACard(action="delete", card_id=card_id).pack())
     b.button(text="🔙 К списку", callback_data=ACard(action="list", index=0).pack())
-    b.adjust(2, 2, 2, 2, 1, 1, 1)
+    
+    b.adjust(2, 2, 2, 2, 1, 1, 1, 1, 1)
+    return b.as_markup()
+
+
+def get_card_settings_menu(card_id: int, is_sellable: bool, is_tradeable: bool) -> InlineKeyboardMarkup:
+    """Меню тонкой настройки карты (продажа/передача)."""
+    b = InlineKeyboardBuilder()
+    
+    sell_text = "✅ Продажа разрешена" if is_sellable else "❌ Продажа запрещена"
+    trade_text = "✅ Передача разрешена" if is_tradeable else "❌ Передача запрещена"
+    
+    b.button(text=sell_text, callback_data=ACard(action="toggle_sell", card_id=card_id).pack())
+    b.button(text=trade_text, callback_data=ACard(action="toggle_trade", card_id=card_id).pack())
+    b.button(text="🔙 Назад", callback_data=ACard(action="view", card_id=card_id).pack())
+    b.adjust(1)
     return b.as_markup()
 
 
@@ -165,4 +184,4 @@ def attach_card_list_nav(
     ctrl.adjust(2)
 
     b.attach(nav)
-    b.attach(ctrl) 
+    b.attach(ctrl)
