@@ -15,10 +15,10 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
 
 from bot.handlers import (
-    admin, admin_bans, admin_broadcast, admin_cards, admin_tools,
-    auction, bank, cards, clan, daily, friends, group, help, market, menu, plus,
+    admin, admin_badges, admin_bans, admin_broadcast, admin_cards, admin_titles, admin_tools,
+    auction, bank, cards, clan, craft, daily, dice, friends, group, help, market, menu, plus,
     profile, promo, pvp, rating, ref, roles, shop, start, stats,
-    support, support_panel, trade, dice,
+    support, support_panel, trade,
 )
 from bot.middlewares.ban import BanMiddleware
 from bot.middlewares.last_seen import LastSeenMiddleware
@@ -65,7 +65,10 @@ for r in (
     menu,
     clan,
     dice,
-    group, # <-- Добавлен роутер групповых команд
+    group,
+    admin_titles,
+    craft,
+    admin_badges,
 ):
     dp.include_router(r.router)
 
@@ -651,7 +654,7 @@ async def clan_invites_expire_task() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 Запуск Indy Carts v1.6.0 (Visual Merge)...")
+    logger.info("🚀 Запуск Indy Carts v1.9.0 (Visual Merge)...")
 
     registry = BackgroundTaskRegistry()
 
@@ -715,7 +718,7 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Остановлен полностью")
 
 
-app = FastAPI(title="Indy Carts", version="1.6.0", lifespan=lifespan)
+app = FastAPI(title="Indy Carts", version="1.9.0", lifespan=lifespan)
 
 
 # ═════════════════════════════════════════════
@@ -744,7 +747,7 @@ async def health() -> dict:
         me = await bot.get_me()
         return {
             "status": "ok",
-            "version": "1.6.0",
+            "version": "1.9.0",
             "bot": me.username,
             "webhook": info.url,
         }
@@ -812,4 +815,4 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=settings.PORT)
+    uvicorn.run(app, host="0.0.0.0", port=settings.PORT) 
