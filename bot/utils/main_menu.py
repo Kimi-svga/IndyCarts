@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.constants import CLAN_ROLE_EMOJI, MAIN_MENU_TITLE
-from db.models import Card, Clan, ClanMember, Friend, User, UserCard
+from db.models import Badge, Card, Clan, ClanMember, Friend, User, UserBadge, UserCard
 
 
 async def build_main_menu_text(
@@ -48,9 +48,25 @@ async def build_main_menu_text(
         if user.last_daily_at.date() == date.today():
             daily_status = "получена"
 
+    # БЕЙДЖИ (визуальные иконки)
+    badges = (await session.execute(
+        select(Badge)
+        .join(UserBadge, UserBadge.badge_id == Badge.id)
+        .where(UserBadge.user_id == user.id)
+    )).scalars().all()
+    
+    badges_text = ""
+    if badges:
+        badges_text = " " + "".join(b.icon for b in badges)
+
+    # ТЕКСТОВЫЙ ТИТУЛ (как у Лины)
+    title_line = ""
+    if user.custom_title:
+        title_line = f"\n{user.custom_title}"
+
     text = (
         f"{MAIN_MENU_TITLE}\n\n"
-        f"👤 <b>@{user.username}</b>{clan_line}\n"
+        f"👤 <b>@{user.username}</b>{badges_text}{title_line}{clan_line}\n"
         f"💰 <b>{user.balance:,}</b>\n"
         f"🃏 <b>{cards_count}</b> карт · 💎 <b>{collection_value:,}</b>\n"
         f"⚔️ PvP: <b>{user.pvp_rating}</b> · 🔥 Стрик: <b>{user.daily_streak}</b>\n"
@@ -75,4 +91,4 @@ async def build_main_menu_text_for(
         return "❌ Сначала /start", None
 
     text = await build_main_menu_text(user, session)
-    return text, user
+    return text, user 
