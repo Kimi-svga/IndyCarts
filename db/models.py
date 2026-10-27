@@ -80,6 +80,11 @@ class User(Base):
     
     custom_title: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
+    # 👇 НОВОЕ ПОЛЕ ДЛЯ АЛЬТОВ
+    active_alt_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
     support_reputation: Mapped[int] = mapped_column(Integer, default=0)
@@ -821,3 +826,24 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), index=True,
     )
+
+
+# ═════════════════════════════════════════════
+# АЛЬТ-АККАУНТЫ (для тестов)
+# ═════════════════════════════════════════════
+
+class AltAccount(Base):
+    __tablename__ = "alt_accounts"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    main_user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    alt_user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, unique=True, index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("main_user_id", "alt_user_id", name="uq_alt_pair"),)
