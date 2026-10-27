@@ -309,7 +309,9 @@ CLAN_TAG_MIN = 2
 CLAN_TAG_MAX = 4
 CLAN_DESC_MAX = 200
 
-CLAN_CREATE_PRICE = 200_000
+# ОБНОВЛЕНИЕ: Цена снижена, первые 5 кланов бесплатно
+CLAN_CREATE_PRICE = 100_000
+CLAN_FREE_CREATION_LIMIT = 5
 CLAN_TOP_LIMIT = 10
 
 CLAN_ROLES = ["leader", "officer", "member"]
@@ -331,13 +333,6 @@ CLAN_ROLE_NAMES = {
     "officer": "Офицер",
     "member": "Участник",
 }
-
-# 10 уровней клана.
-# xp_required — XP, чтобы ДОСТИЧЬ этого уровня.
-# max_members — лимит участников.
-# drop_bonus / money_bonus — % бонус к дропу / деньгам.
-# auction_discount — % скидка на комиссию аукциона.
-# extra_attempts — доп. попытки в день каждому участнику.
 
 CLAN_LEVELS = {
     1:  {"xp_required": 0,          "max_members": 10, "drop_bonus": 0.00, "money_bonus": 0.00, "auction_discount": 0.0, "extra_attempts": 0},
