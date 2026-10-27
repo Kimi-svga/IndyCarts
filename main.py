@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 
 from bot.handlers import (
     admin, admin_badges, admin_bans, admin_broadcast, admin_cards, admin_titles, admin_tools,
+    alt,  # <--- ДОБАВЛЕНО
     auction, bank, cards, clan, craft, daily, dice, friends, group, help, market, menu, plus,
     profile, promo, pvp, rating, ref, roles, shop, start, stats,
     support, support_panel, trade,
@@ -69,6 +70,7 @@ for r in (
     admin_titles,
     craft,
     admin_badges,
+    alt,  # <--- ДОБАВЛЕНО
 ):
     dp.include_router(r.router)
 
@@ -815,4 +817,4 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=settings.PORT) 
+    uvicorn.run(app, host="0.0.0.0", port=settings.PORT)
