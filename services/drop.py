@@ -58,7 +58,14 @@ class Drop:
             .limit(1)
             .with_for_update()
         )
-        return (await session.execute(stmt)).scalar_one_or_none()
+        card = (await session.execute(stmt)).scalar_one_or_none()
+        
+        # ОБНОВЛЕНИЕ: Фиксируем тираж сразу, чтобы избежать гонки
+        if card and card.max_supply is not None:
+            card.issued += 1
+            await session.flush()
+            
+        return card
 
     @staticmethod
     async def get_any_card(session: AsyncSession) -> Optional[Card]:
@@ -73,7 +80,13 @@ class Drop:
             .limit(1)
             .with_for_update()
         )
-        return (await session.execute(stmt)).scalar_one_or_none()
+        card = (await session.execute(stmt)).scalar_one_or_none()
+        
+        if card and card.max_supply is not None:
+            card.issued += 1
+            await session.flush()
+            
+        return card
 
     @staticmethod
     async def drop_card(session: AsyncSession) -> Tuple[Optional[Card], bool]:
