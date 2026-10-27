@@ -100,6 +100,17 @@ def can_manage(actor_role: str, target_role: str) -> bool:
     return get_clan_role_level(actor_role) > get_clan_role_level(target_role)
 
 
+async def get_clan_creation_price(session: AsyncSession) -> int:
+    """Возвращает цену создания клана (0 для первых N)."""
+    clans_count = (await session.execute(
+        select(func.count(Clan.id))
+    )).scalar() or 0
+    
+    if clans_count < settings.CLAN_FREE_CREATION_LIMIT:
+        return 0
+    return settings.CLAN_CREATE_PRICE
+
+
 # ═════════════════════════════════════════════
 # CREATE
 # ═════════════════════════════════════════════
@@ -115,7 +126,8 @@ async def create_clan(
     Создаёт клан.
 
     Indy+ — бесплатно.
-    Обычные — 200 000 монет.
+    Первые 5 кланов — бесплатно.
+    Остальные — 100 000 монет.
     """
     name = name.strip()
     tag = tag.strip().upper()
@@ -154,9 +166,9 @@ async def create_clan(
 
     # Оплата
     free_for_plus = settings.CLAN_CREATE_FREE_FOR_PLUS and is_plus_active(user)
+    price = await get_clan_creation_price(session)
 
-    if not free_for_plus:
-        price = settings.CLAN_CREATE_PRICE
+    if not free_for_plus and price > 0:
         if user.balance < price:
             return ClanResult(
                 ok=False,
@@ -199,9 +211,9 @@ async def create_clan(
 
     await session.commit()
 
-    logger.info(f"🏰 Клан создан: {name} [{tag}] by @{user.username}")
+    logger.info(f"🏰 Клан создан: {name} [{tag}] by @{user.username} (цена: {price})")
 
-    return ClanResult(ok=True, clan_id=clan.id, data={"free": free_for_plus})
+    return ClanResult(ok=True, clan_id=clan.id, data={"free": free_for_plus or price == 0})
 
 
 # ═════════════════════════════════════════════
@@ -854,4 +866,4 @@ async def get_clan_log(
         .order_by(ClanLog.created_at.desc())
         .limit(limit)
     )).all()
-    return list(rows) 
+    return list(rows)
