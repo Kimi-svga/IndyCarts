@@ -14,13 +14,6 @@ logger = setup_logger()
 
 
 class UserMiddleware(BaseMiddleware):
-    """
-    Кладёт User в data['user'] для всех хендлеров.
-    
-    Если у основного юзера active_alt_id != None → кладёт АЛЬТА.
-    Иначе → кладёт основного.
-    """
-
     async def __call__(
         self,
         handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
@@ -37,13 +30,17 @@ class UserMiddleware(BaseMiddleware):
                     select(User).where(User.telegram_id == tg_user.id)
                 )).scalar_one_or_none()
 
-                # Если основной есть И у него активен альт — берём альта
+                # Если основной есть И у него активен альт
                 if main_user is not None and main_user.active_alt_id is not None:
                     alt = await session.get(User, main_user.active_alt_id)
                     if alt is not None:
                         data["user"] = alt
                         data["main_user"] = main_user
                         data["is_alt_session"] = True
+                        
+                        # 👇 МАГИЯ: Подменяем ID для всех хендлеров
+                        tg_user.id = alt.telegram_id 
+                        
                         return await handler(event, data)
 
                 data["user"] = main_user
