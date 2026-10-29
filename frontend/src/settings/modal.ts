@@ -3,17 +3,14 @@
  */
 
 import {
-  ACCENTS,
   DEFAULT_SETTINGS,
   applySettings,
   loadSettings,
   saveSettings,
 } from './store';
 
-import type {
-  Accent,
-  Settings,
-} from './store';
+import type { Settings, Accent } from '@/types/theme';
+import { ACCENTS } from '@/types/theme';
 
 export class SettingsModal {
   private overlay: HTMLElement;
@@ -89,7 +86,7 @@ export class SettingsModal {
             <div class="accent-dot ${s.accent === a ? 'active' : ''}"
                  data-accent="${a}"
                  style="background: ${ACCENTS[a].color};"
-                 title="${ACCENTS[a].label}">
+                 title="${String(ACCENTS[a].color)}">
             </div>
           `).join('')}
         </div>
@@ -188,7 +185,7 @@ export class SettingsModal {
     const active = current === value ? 'active' : '';
     return `
       <button class="setting-option ${active}"
-              data-key="${key}"
+              data-key="${String(key)}"
               data-value="${value}">
         ${label}
       </button>
