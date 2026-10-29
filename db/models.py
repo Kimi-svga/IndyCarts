@@ -79,8 +79,7 @@ class User(Base):
     creator_title: Mapped[str | None] = mapped_column(String(32), nullable=True)
     
     custom_title: Mapped[str | None] = mapped_column(String(64), nullable=True)
-
-    # 👇 НОВОЕ ПОЛЕ ДЛЯ АЛЬТОВ
+    
     active_alt_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -161,6 +160,10 @@ class UserCard(Base):
     can_sell_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     acquired_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     acquired_price: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    # 👇 НОВЫЕ ПОЛЯ (ПРОКЛЯТИЕ)
+    is_cursed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    cursed_debt: Mapped[int] = mapped_column(BigInteger, default=0)
 
 
 class PriceHistory(Base):
@@ -829,7 +832,7 @@ class Notification(Base):
 
 
 # ═════════════════════════════════════════════
-# АЛЬТ-АККАУНТЫ (для тестов)
+# АЛЬТ-АККАУНТЫ
 # ═════════════════════════════════════════════
 
 class AltAccount(Base):
