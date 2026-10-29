@@ -16,8 +16,7 @@ from sqlalchemy import func, select
 
 from bot.handlers import (
     admin, admin_badges, admin_bans, admin_broadcast, admin_cards, admin_titles, admin_tools,
-    alt,  # <--- ДОБАВЛЕНО
-    auction, bank, cards, clan, craft, daily, dice, friends, group, help, market, menu, plus,
+    alt, auction, bank, cards, clan, craft, daily, dice, friends, group, help, market, menu, plus,
     profile, promo, pvp, rating, ref, roles, shop, start, stats,
     support, support_panel, trade,
 )
@@ -70,7 +69,7 @@ for r in (
     admin_titles,
     craft,
     admin_badges,
-    alt,  # <--- ДОБАВЛЕНО
+    alt,
 ):
     dp.include_router(r.router)
 
@@ -86,27 +85,24 @@ class BackgroundTaskRegistry:
         self._tasks: set[asyncio.Task] = set()
 
     def spawn(self, coro, name: str = "task") -> asyncio.Task:
-        """Запустить задачу и запомнить её (strong reference)."""
         task = asyncio.create_task(coro, name=name)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
         return task
 
     async def shutdown(self, timeout: float = 5.0) -> None:
-        """Отменить все задачи и дождаться завершения."""
         if not self._tasks:
             logger.info("📭 Нет активных задач")
             return
 
         logger.info(f"🛑 Отмена {len(self._tasks)} задач...")
-
         for task in self._tasks:
             task.cancel()
 
         done, pending = await asyncio.wait(
             self._tasks,
             timeout=timeout,
-            return_exceptions=True,
+            return_when=asyncio.ALL_COMPLETED,
         )
 
         if pending:
@@ -118,6 +114,53 @@ class BackgroundTaskRegistry:
 # ═════════════════════════════════════════════
 # КРОН-ЗАДАЧИ
 # ═════════════════════════════════════════════
+
+async def cursed_cards_task() -> None:
+    """Каждый час забирает 20 монет за проклятые карты."""
+    while True:
+        await asyncio.sleep(3600)
+        try:
+            async with AsyncSessionLocal() as session:
+                cursed = (await session.execute(
+                    select(UserCard).where(UserCard.is_cursed == True)
+                )).scalars().all()
+
+                if not cursed:
+                    continue
+
+                user_debts = {}
+                for uc in cursed:
+                    user_debts[uc.user_id] = user_debts.get(uc.user_id, 0) + 20
+
+                for user_id, debt in user_debts.items():
+                    user = await session.get(User, user_id)
+                    if not user:
+                        continue
+
+                    if user.balance >= debt:
+                        user.balance -= debt
+                        for uc in cursed:
+                            if uc.user_id == user_id:
+                                uc.cursed_debt += 20
+                    else:
+                        for uc in cursed:
+                            if uc.user_id == user_id:
+                                await session.delete(uc)
+                        try:
+                            await bot.send_message(
+                                user.telegram_id,
+                                "💀 <b>Твои проклятые карты сгорели!</b>\n\n"
+                                "У тебя не хватило монет, чтобы проклятие насытилось.",
+                                parse_mode="HTML",
+                            )
+                        except Exception:
+                            pass
+
+                await session.commit()
+                logger.info(f"👻 Проклятия списали монеты у {len(user_debts)} игроков.")
+        except Exception as e:
+            logger.error(f"cursed_cards: {e}")
+
 
 async def save_prices_task() -> None:
     from db.models import PriceHistory
@@ -171,8 +214,7 @@ async def loan_check_task() -> None:
                         try:
                             await bot.send_message(
                                 user.telegram_id,
-                                "⚠️ <b>ПРОСРОЧКА кредита!</b>\n\n"
-                                "3 дня на погашение, иначе дефолт.",
+                                "⚠️ <b>ПРОСРОЧКА кредита!</b>\n\n3 дня на погашение, иначе дефолт.",
                                 parse_mode="HTML",
                             )
                         except Exception:
@@ -496,8 +538,7 @@ async def auction_close_task() -> None:
                         try:
                             await bot.send_message(
                                 winner.telegram_id,
-                                f"🏆 <b>Ты выиграл лот #{lot.id}!</b>\n\n"
-                                f"Ставка: <b>{lot.current_bid:,}</b>",
+                                f"🏆 <b>Ты выиграл лот #{lot.id}!</b>\n\nСтавка: <b>{lot.current_bid:,}</b>",
                                 parse_mode="HTML",
                             )
                         except Exception:
@@ -505,9 +546,7 @@ async def auction_close_task() -> None:
                         try:
                             await bot.send_message(
                                 seller.telegram_id,
-                                f"💰 <b>Лот #{lot.id} продан!</b>\n\n"
-                                f"Цена: <b>{lot.current_bid:,}</b>\n"
-                                f"Комиссия: <b>{fee:,}</b>",
+                                f"💰 <b>Лот #{lot.id} продан!</b>\n\nЦена: <b>{lot.current_bid:,}</b>\nКомиссия: <b>{fee:,}</b>",
                                 parse_mode="HTML",
                             )
                         except Exception:
@@ -676,6 +715,7 @@ async def lifespan(app: FastAPI):
     registry.spawn(ban_expire_task(), name="ban_expire")
     registry.spawn(tickets_auto_close_task(), name="tickets_auto_close")
     registry.spawn(clan_invites_expire_task(), name="clan_invites_expire")
+    registry.spawn(cursed_cards_task(), name="cursed_cards") # 👈 ДОБАВИЛИ
 
     # ═══ Webhook ═══
     webhook_url = f"{settings.WEBHOOK_URL}/webhook"
@@ -696,7 +736,6 @@ async def lifespan(app: FastAPI):
 
     # ═══ SHUTDOWN — жёсткий ═══
     logger.info("🛑 Shutdown начат...")
-
     await registry.shutdown(timeout=5.0)
 
     try:
@@ -758,14 +797,14 @@ async def health() -> dict:
 
 
 # ═════════════════════════════════════════════
-# API (Visual Merge) — с защитой
+# API (Visual Merge)
 # ═════════════════════════════════════════════
 
 from api import router as api_router
 
 if not getattr(api_router, "_vm_attached", False):
     app.include_router(api_router)
-    api_router._vm_attached = True  # type: ignore[attr-defined]
+    api_router._vm_attached = True
     logger.info("✅ API router подключён")
 else:
     logger.warning("⚠️ API router уже подключён — пропуск")
@@ -784,11 +823,7 @@ if FRONTEND_DIST.exists():
 
     assets_dir = FRONTEND_DIST / "assets"
     if assets_dir.exists():
-        app.mount(
-            "/assets",
-            StaticFiles(directory=assets_dir),
-            name="assets",
-        )
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
@@ -808,11 +843,7 @@ else:
 
     @app.get("/")
     async def root():
-        return {
-            "status": "ok",
-            "service": "IndyCarts",
-            "message": "Visual Merge not built yet",
-        }
+        return {"status": "ok", "service": "IndyCarts", "message": "Visual Merge not built yet"}
 
 
 if __name__ == "__main__":
