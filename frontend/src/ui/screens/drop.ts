@@ -1,5 +1,5 @@
 /**
- * Дроп карт с анимацией.
+ * Дроп карт с анимацией призыва и проклятыми картами (Хэллоуин).
  */
 
 import { apiFetch } from '@/api/client';
@@ -18,6 +18,7 @@ interface DropResult {
     issued: number;
   };
   is_iw: boolean;
+  is_cursed?: boolean;
   serial: number | null;
   bonus_money: number;
   attempts_left: number;
@@ -52,6 +53,7 @@ export async function renderDrop(container: HTMLElement): Promise<void> {
   stage.className = 'drop-stage';
   stage.innerHTML = `
     <div class="drop-placeholder" id="drop-placeholder">
+      <div class="summoning-ring"></div>
       <iconify-icon icon="lucide:gift" width="80" height="80"></iconify-icon>
     </div>
     <div class="drop-result" id="drop-result"></div>
@@ -105,18 +107,19 @@ export async function renderDrop(container: HTMLElement): Promise<void> {
     const resultEl = document.getElementById('drop-result');
     const label = document.getElementById('drop-btn-label');
 
-    if (label) label.textContent = 'ДРОП...';
+    if (label) label.textContent = 'ПРИЗЫВ...';
     if (resultEl) resultEl.classList.remove('visible');
 
-    const icons = ['lucide:gift', 'lucide:car', 'lucide:flag', 'lucide:star', 'lucide:trophy'];
-    let ticks = 0;
-    const interval = window.setInterval(() => {
-      if (placeholder) {
-        placeholder.innerHTML = `<iconify-icon icon="${icons[ticks % icons.length]}" width="80" height="80"></iconify-icon>`;
-      }
-      ticks++;
-    }, 80);
+    // ─── Анимация призыва ───
+    if (placeholder) {
+      placeholder.classList.add('summoning');
+      placeholder.innerHTML = `
+        <div class="summoning-ring"></div>
+        <iconify-icon icon="lucide:skull" width="80" height="80"></iconify-icon>
+      `;
+    }
 
+    // ─── Запрос ───
     let data: DropResult | null = null;
     let errorMsg: string | null = null;
 
@@ -127,12 +130,16 @@ export async function renderDrop(container: HTMLElement): Promise<void> {
       errorMsg = err.message ?? 'Ошибка дропа';
     }
 
+    // Минимум 1.2 сек анимации
     await new Promise((r) => setTimeout(r, 1200));
 
-    window.clearInterval(interval);
-
+    // ─── Конец анимации ───
     if (placeholder) {
-      placeholder.innerHTML = '<iconify-icon icon="lucide:gift" width="80" height="80"></iconify-icon>';
+      placeholder.classList.remove('summoning');
+      placeholder.innerHTML = `
+        <div class="summoning-ring"></div>
+        <iconify-icon icon="lucide:gift" width="80" height="80"></iconify-icon>
+      `;
     }
 
     if (errorMsg || !data) {
@@ -144,8 +151,10 @@ export async function renderDrop(container: HTMLElement): Promise<void> {
     }
 
     const card = data.card;
+    const isCursed = data.is_cursed === true;
     const rarityLabel = RARITY_LABEL[card.rarity] ?? card.rarity;
     const iwText = data.is_iw ? '<div class="drop-iw">⭐ INDY WINNER!</div>' : '';
+    const cursedTag = isCursed ? '<div class="cursed-tag">👻 Cursed</div>' : '';
     const serialText = data.serial
       ? `<div class="drop-serial">№ ${data.serial}${card.max_supply ? ` / ${card.max_supply}` : ''}</div>`
       : '';
@@ -155,7 +164,8 @@ export async function renderDrop(container: HTMLElement): Promise<void> {
 
     if (resultEl) {
       resultEl.innerHTML = `
-        <div class="drop-card ${card.rarity}">
+        <div class="drop-card ${card.rarity} ${isCursed ? 'cursed' : ''}">
+          ${cursedTag}
           <div class="drop-card-number">#${card.id}</div>
           ${
             card.image_url
@@ -173,24 +183,26 @@ export async function renderDrop(container: HTMLElement): Promise<void> {
       resultEl.classList.add('visible');
     }
 
-    const messages: Record<string, string> = {
-      legendary: '🔥 ЛЕГЕНДАРНАЯ КАРТА!',
-      mythic: '⭐ МИФИЧЕСКАЯ КАРТА!',
-      epic: '🟣 ЭПИЧЕСКАЯ КАРТА!',
-      rare: '🟢 РЕДКАЯ КАРТА!',
-      limited: '🔴 LIMITED!',
-      season: '⭐ SEASON!',
-      basic: '🔵 Обычная карта',
-    };
-
-    const toastType = data.is_iw ? 'success' : 'info';
-    showToast(messages[card.rarity] ?? 'Карта получена', toastType);
+    if (isCursed) {
+      showToast('👻 Проклятая карта!', 'cursed');
+    } else {
+      const messages: Record<string, string> = {
+        legendary: '🔥 ЛЕГЕНДАРНАЯ КАРТА!',
+        mythic: '⭐ МИФИЧЕСКАЯ КАРТА!',
+        epic: '🟣 ЭПИЧЕСКАЯ КАРТА!',
+        rare: '🟢 РЕДКАЯ КАРТА!',
+        limited: '🔴 LIMITED!',
+        season: '⭐ SEASON!',
+        basic: '🔵 Обычная карта',
+      };
+      showToast(messages[card.rarity] ?? 'Карта получена', data.is_iw ? 'success' : 'info');
+    }
 
     await updateCounter();
   });
 }
 
-function showToast(text: string, type: 'success' | 'error' | 'info'): void {
+function showToast(text: string, type: 'success' | 'error' | 'info' | 'cursed'): void {
   const el = document.createElement('div');
   el.className = `toast toast-${type}`;
   el.textContent = text;
