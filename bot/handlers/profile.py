@@ -47,12 +47,22 @@ async def cb_profile(query: CallbackQuery) -> None:
             )
         )).scalar() or 0
 
+        cursed_count = (await session.execute(
+            select(func.count(UserCard.id)).where(
+                UserCard.user_id == user.id,
+                UserCard.is_cursed == True,
+            )
+        )).scalar() or 0
+
     collection_value = int(collection_value) if collection_value else 0
+
+    cursed_line = f"\n👻 Проклятых карт: <b>{cursed_count}</b>" if cursed_count > 0 else ""
 
     text = (
         f"👤 <b>Профиль @{user.username}</b>\n\n"
         f"💰 Баланс: <b>{user.balance:,}</b>\n"
-        f"🃏 Карт: <b>{cards_count}</b>\n"
+        f"🃏 Карт: <b>{cards_count}</b>"
+        f"{cursed_line}\n"
         f"💎 Стоимость коллекции: <b>{collection_value:,}</b>\n"
         f"⚔️ PvP: <b>{user.pvp_rating}</b> ({user.pvp_wins}W/{user.pvp_losses}L)\n"
         f"🔥 Стрик: <b>{user.daily_streak}</b>\n"
@@ -60,4 +70,4 @@ async def cb_profile(query: CallbackQuery) -> None:
         f"👥 Друзей: <b>{friends_count}</b>"
     )
 
-    await safe_render(query, text, get_profile_menu(friends_count, incoming_count)) 
+    await safe_render(query, text, get_profile_menu(friends_count, incoming_count))
