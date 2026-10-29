@@ -221,4 +221,153 @@ html[data-animations="off"] *::after {
 
 .no-scroll {
   overflow: hidden !important;
-  } 
+}
+
+/* ═══════════════════════════════════════════
+   ХЭЛЛОУИН 2026
+   ═══════════════════════════════════════════ */
+
+body.halloween {
+  --accent: #8b5cf6;
+  --accent-hover: #a78bfa;
+  --accent-soft: rgba(139, 92, 246, 0.15);
+  --bg: #0a0a0c;
+  --bg-2: #121216;
+  --bg-3: #1a1820;
+  --line: #332b40;
+  --line-2: #4a3d5c;
+  --purple: #8b5cf6;
+}
+
+body.halloween::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50vh;
+  background: radial-gradient(
+    ellipse at top,
+    rgba(139, 92, 246, 0.15) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+body.halloween .info-card {
+  border-color: rgba(139, 92, 246, 0.25);
+  box-shadow: 0 0 18px rgba(139, 92, 246, 0.06);
+}
+
+body.halloween .info-card-title iconify-icon {
+  color: var(--purple);
+  filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.6));
+}
+
+body.halloween .menu-item {
+  border-color: rgba(139, 92, 246, 0.2);
+}
+
+body.halloween .menu-item:active {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: var(--purple);
+}
+
+body.halloween .app-bottom-nav {
+  border-top: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+body.halloween .app-nav-item.active {
+  color: var(--purple);
+  filter: drop-shadow(0 0 8px rgba(139, 92, 246, 0.5));
+}
+
+body.halloween .drop-btn:not(:disabled) {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+}
+
+body.halloween .drop-btn:not(:disabled):active {
+  background: linear-gradient(135deg, #a78bfa, #8b5cf6);
+}
+
+/* Проклятая карта (в коллекции / дропе / PvP) */
+.card-item.cursed,
+.drop-card.cursed {
+  border-color: var(--purple);
+  box-shadow: 0 0 30px rgba(139, 92, 246, 0.6);
+  animation: pulse-cursed 2s ease-in-out infinite;
+}
+
+@keyframes pulse-cursed {
+  0%, 100% { box-shadow: 0 0 15px rgba(139, 92, 246, 0.4); }
+  50%      { box-shadow: 0 0 40px rgba(139, 92, 246, 0.8); }
+}
+
+.cursed-tag {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--purple);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  z-index: 2;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.6);
+}
+
+/* Кольцо призыва */
+.drop-placeholder {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.summoning-ring {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border: 2px dashed var(--purple);
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.drop-placeholder.summoning .summoning-ring {
+  opacity: 1;
+  animation: spin-ring 1s linear infinite;
+}
+
+.drop-placeholder.summoning iconify-icon {
+  color: var(--purple) !important;
+  animation: shake-icon 0.1s infinite;
+}
+
+@keyframes spin-ring {
+  0%   { transform: rotate(0deg) scale(0.8); }
+  50%  { transform: rotate(180deg) scale(1.1); }
+  100% { transform: rotate(360deg) scale(0.8); }
+}
+
+@keyframes shake-icon {
+  0%   { transform: translate(1px, 1px) rotate(0deg); }
+  20%  { transform: translate(-2px, 0) rotate(1deg); }
+  40%  { transform: translate(1px, -1px) rotate(1deg); }
+  60%  { transform: translate(-2px, 1px) rotate(0deg); }
+  80%  { transform: translate(-1px, -1px) rotate(1deg); }
+  100% { transform: translate(1px, -2px) rotate(-1deg); }
+}
+
+/* Toast проклятия */
+.toast.toast-cursed {
+  border-color: var(--purple);
+  color: var(--purple);
+     } 
