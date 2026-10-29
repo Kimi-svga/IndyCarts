@@ -27,20 +27,14 @@ logger = setup_logger()
 
 
 class PvpAction(CallbackData, prefix="pvp"):
-    """Действие в PvP."""
     action: str
     battle_id: int
 
 
 class PvpBet(CallbackData, prefix="pvpbet"):
-    """Ставка карты."""
     battle_id: int
     user_card_id: int
 
-
-# ═════════════════════════════════════════════
-# МЕНЮ PVP
-# ═════════════════════════════════════════════
 
 @router.callback_query(MainMenu.filter(F.action == "pvp"))
 async def cb_pvp(query: CallbackQuery) -> None:
@@ -71,12 +65,11 @@ async def cb_pvp(query: CallbackQuery) -> None:
             )
             return
 
-        # Клановый бонус PvP
         clan, _ = await get_user_clan(session, user.id)
         clan_line = ""
         if clan is not None:
             bonuses = get_clan_bonuses(clan.level)
-            pvp_bonus = bonuses.auction_discount / 10  # 0.0–0.5
+            pvp_bonus = bonuses.auction_discount / 10
             if pvp_bonus > 0:
                 clan_line = f"\n🏰 <b>Клан-бонус PvP:</b> +{pvp_bonus * 100:.0f}%"
 
@@ -106,10 +99,6 @@ async def cb_pvp(query: CallbackQuery) -> None:
 
     await safe_render(query, text, b.as_markup())
 
-
-# ═════════════════════════════════════════════
-# ВЫЗОВ НА ДУЭЛЬ
-# ═════════════════════════════════════════════
 
 @router.message(Command("duel"))
 async def cmd_duel(message: Message) -> None:
@@ -205,10 +194,6 @@ async def cmd_duel(message: Message) -> None:
     )
 
 
-# ═════════════════════════════════════════════
-# ОТКЛОНЕНИЕ
-# ═════════════════════════════════════════════
-
 @router.callback_query(PvpAction.filter(F.action == "decline"))
 async def cb_pvp_decline(query: CallbackQuery, callback_data: PvpAction) -> None:
     await safe_answer(query, "❌ Отклонено")
@@ -248,10 +233,6 @@ async def cb_pvp_decline(query: CallbackQuery, callback_data: PvpAction) -> None
         except Exception:
             pass
 
-
-# ═════════════════════════════════════════════
-# ВЫБОР КАРТ
-# ═════════════════════════════════════════════
 
 @router.callback_query(PvpAction.filter(F.action == "choose"))
 async def cb_pvp_choose(query: CallbackQuery, callback_data: PvpAction) -> None:
@@ -315,10 +296,11 @@ async def _show_card_picker(query: CallbackQuery, battle_id: int, index: int) ->
     emoji = RARITY_EMOJI.get(card.rarity, "⚪")
     is_chosen = user_card.id in chosen_ids
     mark = " ✅" if is_chosen else ""
+    cursed_mark = " 👻" if user_card.is_cursed else ""
 
     text = (
         f"🎁 <b>Выбери карты для ставки</b>\n\n"
-        f"{emoji} <b>{card.name}</b>{mark}\n"
+        f"{emoji} <b>{card.name}</b>{cursed_mark}{mark}\n"
         f"Редкость: {RARITY_NAMES[card.rarity]}\n"
         f"Цена: <b>{card.current_price:,}</b>\n\n"
         f"Карта <b>{index + 1}</b> из <b>{len(rows)}</b>\n"
@@ -430,10 +412,6 @@ async def cb_pvp_toggle(query: CallbackQuery) -> None:
     await _show_card_picker(query, battle_id, 0)
 
 
-# ═════════════════════════════════════════════
-# ГОТОВНОСТЬ
-# ═════════════════════════════════════════════
-
 @router.callback_query(PvpAction.filter(F.action == "ready"))
 async def cb_pvp_ready(query: CallbackQuery, callback_data: PvpAction) -> None:
     await safe_answer(query)
@@ -497,10 +475,6 @@ async def cb_pvp_ready(query: CallbackQuery, callback_data: PvpAction) -> None:
         await _run_battle_async(battle_id, query.bot)
 
 
-# ═════════════════════════════════════════════
-# АВТОМАТИЧЕСКИЙ БОЙ (с клановым бонусом)
-# ═════════════════════════════════════════════
-
 async def _run_battle_async(battle_id: int, bot) -> None:
     async with AsyncSessionLocal() as session:
         battle = (await session.execute(
@@ -528,19 +502,17 @@ async def _run_battle_async(battle_id: int, bot) -> None:
         winner_delta = elo.winner_delta
         loser_delta = elo.loser_delta
 
-        # Indy+ множитель
         if winner.plus_tier == "indy_plus":
             winner_delta = int(winner_delta * settings.PLUS_PVP_MULTIPLIER)
         if loser.plus_tier == "indy_plus":
             loser_delta = int(loser_delta / settings.PLUS_PVP_MULTIPLIER)
 
-        # ─── КЛАНОВЫЙ МНОЖИТЕЛЬ ───
         winner_clan, _ = await get_user_clan(session, winner.id)
         loser_clan, _ = await get_user_clan(session, loser.id)
 
         if winner_clan is not None:
             wb = get_clan_bonuses(winner_clan.level)
-            pvp_bonus = wb.auction_discount / 10  # 0.0–0.5
+            pvp_bonus = wb.auction_discount / 10
             if pvp_bonus > 0:
                 winner_delta = int(winner_delta * (1 + pvp_bonus))
 
@@ -589,12 +561,39 @@ async def _run_battle_async(battle_id: int, bot) -> None:
             if uc:
                 uc.is_locked = False
 
+        # ─── ПРОКЛЯТЫЕ КАРТЫ ───
+        has_cursed = False
+        for stake in winner_stakes:
+            uc = await session.get(UserCard, stake.user_card_id)
+            if uc and uc.is_cursed:
+                has_cursed = True
+                break
+
         money_prize = calculate_pvp_money_prize(
             battle.money_stake, battle.money_stake,
             commission=settings.PVP_BANK_COMMISSION,
         )
+
+        if has_cursed:
+            money_prize = int(money_prize * 1.3) # +30%
+
         winner.balance += money_prize
         loser.balance -= battle.money_stake
+
+        # Сгорание проклятой карты у проигравшего
+        for stake in loser_stakes:
+            uc = await session.get(UserCard, stake.user_card_id)
+            if uc and uc.is_cursed:
+                await session.delete(uc)
+                try:
+                    await bot.send_message(
+                        loser.telegram_id,
+                        "💀 <b>Твоя проклятая карта сгорела в бою!</b>\n\n"
+                        "Ты проиграл, и проклятие забрало её.",
+                        parse_mode="HTML"
+                    )
+                except Exception:
+                    pass
 
         winner.pvp_money_won += money_prize
         winner.pvp_money_staked += battle.money_stake
@@ -633,4 +632,4 @@ async def _run_battle_async(battle_id: int, bot) -> None:
 
 @router.callback_query(F.data == "noop")
 async def cb_noop(query: CallbackQuery) -> None:
-    await safe_answer(query)
+    await safe_answer(query) 
