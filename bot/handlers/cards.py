@@ -28,7 +28,6 @@ router = Router()
 
 
 class TradeState(StatesGroup):
-    """Ожидание юза при трейде."""
     waiting_username = State()
 
 
@@ -142,7 +141,6 @@ async def show_card(query: CallbackQuery, rows: list, index: int, rarity: str = 
     )
 
     b = InlineKeyboardBuilder()
-
     b.button(text="⏮", callback_data=f"crd_0_{rarity}" if index > 0 else "noop")
     b.button(text="⬅️", callback_data=f"crd_{index - 1}_{rarity}" if index > 0 else "noop")
     b.button(text=f"{index + 1}/{len(rows)}", callback_data="noop")
@@ -402,7 +400,6 @@ async def cb_sell(query: CallbackQuery) -> None:
             await query.bot.send_message(query.from_user.id, "❌ Карта не найдена")
             return
             
-        # Проверка тонкой настройки
         if not card.is_sellable:
             await query.bot.send_message(query.from_user.id, "⛔ Эту карту нельзя продать (эксклюзив)")
             return
@@ -558,7 +555,8 @@ async def cb_drop(query: CallbackQuery) -> None:
         bonuses = get_clan_bonuses(clan.level) if clan else None
 
         drop_bonus = bonuses.drop_bonus if bonuses else 0.0
-        card, is_iw = await Drop.drop_card_with_bonus(session, drop_bonus)
+        
+        card, is_iw, is_cursed = await Drop.drop_card_with_bonus(session, drop_bonus)
 
         if card is None:
             await safe_render(query, "❌ Нет карт в базе", get_cards_menu())
@@ -566,13 +564,13 @@ async def cb_drop(query: CallbackQuery) -> None:
 
         serial = None
         if card.max_supply is not None:
-            card.issued += 1
             serial = card.issued
 
         session.add(UserCard(
             user_id=user.id,
             card_id=card.id,
             is_iw=is_iw,
+            is_cursed=is_cursed,
             acquired_price=card.current_price,
             serial_number=serial,
         ))
@@ -599,6 +597,7 @@ async def cb_drop(query: CallbackQuery) -> None:
 
     emoji = RARITY_EMOJI.get(card_rarity, "⚪")
     iw_text = " ⭐ <b>INDY WINNER!</b>" if is_iw else ""
+    cursed_text = " 👻 <b>ПРОКЛЯТАЯ!</b>" if is_cursed else ""
     limit_text = ""
     if card_max_supply is not None:
         limit_text = f"\n📜 Тираж: <b>{card_issued}/{card_max_supply}</b>"
@@ -617,7 +616,7 @@ async def cb_drop(query: CallbackQuery) -> None:
 
     text = (
         f"🎴 <b>Дроп!</b>\n\n"
-        f"{emoji} <b>{card_name}</b>{iw_text}\n"
+        f"{emoji} <b>{card_name}</b>{iw_text}{cursed_text}\n"
         f"Редкость: {RARITY_NAMES[card_rarity]}\n"
         f"Цена: {card_price:,}{limit_text}\n"
         f"{ownership_text}"
