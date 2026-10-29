@@ -240,7 +240,7 @@ async def get_cards(user: User = Depends(get_current_user)):
 @router.get("/cards/{card_id}/image")
 async def get_card_image(card_id: int):
     cache_file = CACHE_DIR / f"{card_id}.jpg"
-    if cache_file.exists():
+    if cache_file.exists() and cache_file.stat().st_size > 0:
         return FileResponse(
             cache_file,
             media_type="image/jpeg",
@@ -289,20 +289,20 @@ async def drop_card(user: User = Depends(get_current_user)):
         bonuses = get_clan_bonuses(clan.level) if clan else None
         drop_bonus = bonuses.drop_bonus if bonuses else 0.0
 
-        card, is_iw = await Drop.drop_card_with_bonus(session, drop_bonus)
+        card, is_iw, is_cursed = await Drop.drop_card_with_bonus(session, drop_bonus)
 
         if card is None:
             raise HTTPException(500, "Нет карт в базе")
 
         serial = None
         if card.max_supply is not None:
-            card.issued += 1
             serial = card.issued
 
         session.add(UserCard(
             user_id=user_row.id,
             card_id=card.id,
             is_iw=is_iw,
+            is_cursed=is_cursed,
             acquired_price=card.current_price,
             serial_number=serial,
         ))
@@ -329,6 +329,7 @@ async def drop_card(user: User = Depends(get_current_user)):
                 "issued": card.issued,
             },
             "is_iw": is_iw,
+            "is_cursed": is_cursed,
             "serial": serial,
             "bonus_money": bonus_money,
             "attempts_left": user_row.daily_attempts,
@@ -371,6 +372,9 @@ async def sell_card(
         card = await session.get(Card, payload.card_id)
         if card is None:
             raise HTTPException(404, "Карта не найдена")
+
+        if not card.is_sellable:
+            raise HTTPException(400, "Эту карту нельзя продать")
 
         price = int(card.current_price * 0.9)
 
@@ -425,6 +429,9 @@ async def gift_card(
         card = await session.get(Card, payload.card_id)
         if card is None:
             raise HTTPException(404, "Карта не найдена")
+
+        if not card.is_tradeable:
+            raise HTTPException(400, "Эту карту нельзя передать")
 
         user_card.user_id = receiver.id
         await session.commit()
@@ -957,10 +964,7 @@ async def get_battle(
         my_cards = (await session.execute(
             select(UC, C)
             .join(C, UC.card_id == C.id)
-            .where(
-                UC.user_id == user.id,
-                UC.is_locked == False,
-            )
+            .where(UC.user_id == user.id)
             .order_by(C.current_price.desc())
             .limit(30)
         )).all()
@@ -991,6 +995,7 @@ async def get_battle(
                 "price": c.current_price,
                 "image_url": f"/api/cards/{c.id}/image" if c.image_file_id else None,
                 "is_chosen": uc.id in chosen_ids,
+                "is_cursed": bool(getattr(uc, "is_cursed", False)),
             }
             for uc, c in my_cards
         ],
@@ -1207,15 +1212,29 @@ async def _run_battle(session, battle):
         )
     )).scalars().all()
 
+    # Проклятые карты — бонус
+    has_cursed = False
     for s in winner_stakes:
         uc = await session.get(UC, s.user_card_id)
         if uc:
             uc.is_locked = False
+            if getattr(uc, "is_cursed", False):
+                has_cursed = True
+
+    # Сгорание проклятой у проигравшего
+    for s in loser_stakes:
+        uc = await session.get(UC, s.user_card_id)
+        if uc and getattr(uc, "is_cursed", False):
+            await session.delete(uc)
 
     money_prize = calculate_pvp_money_prize(
         battle.money_stake, battle.money_stake,
         commission=settings.PVP_BANK_COMMISSION,
     )
+
+    if has_cursed:
+        money_prize = int(money_prize * 1.3)
+
     winner.balance += money_prize
     loser.balance -= battle.money_stake
 
@@ -1538,7 +1557,7 @@ async def auction_buyout(
 
 
 # ═════════════════════════════════════════════
-# NOTIFICATIONS (для Visual Merge)
+# NOTIFICATIONS
 # ═════════════════════════════════════════════
 
 class MarkReadRequest(BaseModel):
@@ -1547,13 +1566,6 @@ class MarkReadRequest(BaseModel):
 
 @router.get("/notifications")
 async def get_notifications(user: User = Depends(get_current_user)):
-    """
-    Последние уведомления игрока.
-
-    Возвращает:
-      items[]  — список уведомлений (до 30)
-      unread   — количество непрочитанных
-    """
     items = await get_user_notifications(user.id, limit=30)
     unread = await get_unread_count(user.id)
 
@@ -1581,7 +1593,6 @@ async def read_notification(
     payload: MarkReadRequest,
     user: User = Depends(get_current_user),
 ):
-    """Помечает одно уведомление прочитанным."""
     ok = await mark_read(user.id, payload.notification_id)
     if not ok:
         raise HTTPException(404, "Уведомление не найдено")
@@ -1592,7 +1603,6 @@ async def read_notification(
 
 @router.delete("/notifications/clear")
 async def clear_notifications(user: User = Depends(get_current_user)):
-    """Удаляет все уведомления игрока."""
     deleted = await clear_user_notifications(user.id)
     return {"ok": True, "deleted": deleted, "unread": 0}
 
