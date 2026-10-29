@@ -139,6 +139,14 @@ export class SettingsModal {
         </div>
       </div>
 
+      <div class="setting-group">
+        <div class="setting-label">🎃 Хэллоуин</div>
+        <div class="setting-options">
+          ${this.option('halloween', 'off', 'Выкл')}
+          ${this.option('halloween', 'on', 'Вкл')}
+        </div>
+      </div>
+
       <button class="settings-reset" id="settings-reset">
         <iconify-icon icon="lucide:rotate-ccw" width="16" height="16"></iconify-icon>
         СБРОСИТЬ
