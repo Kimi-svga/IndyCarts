@@ -23,7 +23,7 @@ from core.constants import (
     ROLE_EMOJI, ROLE_LEVELS, ROLE_NAMES,
     TICKET_CATEGORIES, TRUST_DELTA, TRUST_RANKS,
 )
-from db.models import Card, User, UserCard
+from db.models import Card, User, UserCard, AdminRole, Clan, ClanMember, Friend
 from db.session import AsyncSessionLocal
 from services.notifications import (
     clear_user_notifications,
@@ -1862,3 +1862,96 @@ async def api_health():
         "api": "v1",
         "service": "Visual Merge",
     }
+# ═════════════════════════════════════════════
+# VM 2.0: ПАТЧ (НОВЫЕ ЭНДПОИНТЫ)
+# ═════════════════════════════════════════════
+
+@router.get("/user/{username}")
+async def get_player_profile(username: str, user: User = Depends(get_current_user)):
+    target_name = username.lstrip("@").lower()
+    
+    async with AsyncSessionLocal() as session:
+        target = (await session.execute(select(User).where(User.username_normalized == target_name))).scalar_one_or_none()
+        if target is None:
+            raise HTTPException(404, "Игрок не найден")
+            
+        cards_count = (await session.execute(select(func.count(UserCard.id)).where(UserCard.user_id == target.id))).scalar() or 0
+        collection_value = (await session.execute(select(func.sum(Card.current_price)).join(UserCard, UserCard.card_id == Card.id).where(UserCard.user_id == target.id))).scalar() or 0
+
+        clan_row = (await session.execute(
+            select(Clan, ClanMember).join(ClanMember, ClanMember.clan_id == Clan.id).where(ClanMember.user_id == target.id)
+        )).first()
+
+        clan_data = None
+        if clan_row:
+            c, m = clan_row
+            clan_data = {"tag": c.tag, "name": c.name, "level": c.level, "role": m.role}
+
+        is_friend = (await session.execute(
+            select(Friend).where(Friend.user_id == user.id, Friend.friend_id == target.id)
+        )).scalar_one_or_none() is not None
+
+        badges = []
+        if target.telegram_id in settings.OWNER_IDS:
+            badges.append("team")
+        if target.plus_tier == "indy_plus" and target.plus_expires_at and target.plus_expires_at > datetime.utcnow():
+            badges.append("plus")
+        if target.trust_score >= 100:
+            badges.append("trader")
+        
+        admin_role = (await session.execute(
+            select(AdminRole).where(AdminRole.user_id == target.id, AdminRole.is_active == True)
+        )).scalar_one_or_none()
+        if admin_role:
+            badges.append("admin")
+
+        pinned = (await session.execute(
+            select(Card).join(UserCard, UserCard.card_id == Card.id)
+            .where(UserCard.user_id == target.id).order_by(Card.current_price.desc()).limit(3)
+        )).scalars().all()
+
+        return {
+            "telegram_id": target.telegram_id, "username": target.username,
+            "balance": target.balance, "pvp_rating": target.pvp_rating,
+            "pvp_wins": target.pvp_wins, "pvp_losses": target.pvp_losses,
+            "daily_streak": target.daily_streak, "cards_count": cards_count,
+            "collection_value": int(collection_value), "clan": clan_data,
+            "badges": badges, "is_friend": is_friend,
+            "pinned_cards": [
+                {"id": c.id, "name": c.name, "rarity": c.rarity, "image_url": f"/api/cards/{c.id}/image" if c.image_file_id else None, "price": c.current_price}
+                for c in pinned
+            ]
+        }
+
+
+@router.get("/plus/benefits")
+async def plus_benefits():
+    return {
+        "price_stars": settings.PLUS_PRICE_STARS, "price_coins": settings.PLUS_PRICE_COINS, "duration_days": settings.PLUS_DURATION_DAYS,
+        "benefits": [
+            {"icon": "lucide:zap", "title": "Больше дропа", "value": f"+{settings.PLUS_BONUS_ATTEMPTS} в день", "desc": f"{settings.PLUS_DAILY_ATTEMPTS} попыток вместо {settings.DAILY_ATTEMPTS}."},
+            {"icon": "lucide:swords", "title": "PvP Множитель", "value": f"x{settings.PLUS_PVP_MULTIPLIER} рейтинг", "desc": "Быстрее поднимайся в топ."},
+            {"icon": "lucide:percent", "title": "Аукцион", "value": f"{settings.PLUS_AUCTION_COMMISSION}% комиссия", "desc": f"Вместо 10% отдаешь только {settings.PLUS_AUCTION_COMMISSION}%."},
+            {"icon": "lucide:shield", "title": "Кланы", "value": "Бесплатно", "desc": "Создание клана за 0 монет."},
+            {"icon": "lucide:gift", "title": "Подарки", "value": "Каждый месяц", "desc": "Эксклюзивные карты и монеты."}
+        ]
+    }
+
+class PushRequest(BaseModel):
+    title: str
+    text: str
+    icon: str
+    btn_text: str | None = None
+    btn_action: str | None = None
+
+@router.post("/admin/push")
+async def send_custom_push(payload: PushRequest, user: User = Depends(get_current_user)):
+    if user.telegram_id not in settings.OWNER_IDS and user.telegram_id not in settings.ADMIN_IDS:
+        raise HTTPException(403, "Нет прав")
+        
+    from services.notifications import notify_many
+    async with AsyncSessionLocal() as session:
+        users = (await session.execute(select(User.id))).scalars().all()
+        await notify_many(session, list(users), "broadcast", payload.title, payload.text, payload.icon, "blue", payload.btn_action)
+        await session.commit()
+    return {"ok": True, "sent": len(users)}
