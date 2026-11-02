@@ -142,6 +142,7 @@ async def get_current_user(
 # ME
 # ═════════════════════════════════════════════
 
+
 @router.get("/me")
 async def get_me(user: User = Depends(get_current_user)):
     async with AsyncSessionLocal() as session:
@@ -154,6 +155,27 @@ async def get_me(user: User = Depends(get_current_user)):
             .join(UserCard, UserCard.card_id == Card.id)
             .where(UserCard.user_id == user.id)
         )).scalar() or 0
+
+        # ─── badges ───
+        badges = []
+        if user.telegram_id in settings.OWNER_IDS:
+            badges.append("team")
+        if (
+            user.plus_tier == "indy_plus"
+            and user.plus_expires_at
+            and user.plus_expires_at > datetime.utcnow()
+        ):
+            badges.append("plus")
+        if user.trust_score >= 100:
+            badges.append("trader")
+        admin_role = (await session.execute(
+            select(AdminRole).where(
+                AdminRole.user_id == user.id,
+                AdminRole.is_active == True,
+            )
+        )).scalar_one_or_none()
+        if admin_role:
+            badges.append("admin")
 
     return {
         "telegram_id": user.telegram_id,
@@ -171,8 +193,9 @@ async def get_me(user: User = Depends(get_current_user)):
         "plus_expires_at": user.plus_expires_at.isoformat() if user.plus_expires_at else None,
         "ban_level": user.ban_level,
         "created_at": user.created_at.isoformat(),
-    }
-
+        "badges": badges,
+        "custom_title": user.custom_title,
+    }    
 
 # ═════════════════════════════════════════════
 # CONFIG
