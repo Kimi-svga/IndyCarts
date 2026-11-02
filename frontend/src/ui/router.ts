@@ -16,7 +16,8 @@ export type ScreenName =
   | 'rating'
   | 'ref'
   | 'plus'
-  | 'terminal';
+  | 'terminal'
+  | 'player';   // ← ДОБАВИТЬ ЭТО
 
 type ScreenHandler = (container: HTMLElement) => void | Promise<void>;
 
