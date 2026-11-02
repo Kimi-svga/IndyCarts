@@ -31,6 +31,7 @@ import { renderRating } from '@/ui/screens/rating';
 import { renderClan } from '@/ui/screens/clan';
 import { renderAuction } from '@/ui/screens/auction';
 import { renderTerminal } from '@/ui/screens/terminal';
+import { renderPlayer } from '@/ui/screens/player';
 
 interface MeData {
   telegram_id: number;
@@ -47,6 +48,8 @@ interface MeData {
   plus_tier: string;
   plus_expires_at: string | null;
   ban_level: string;
+  badges?: string[];
+  custom_title?: string | null;
 }
 
 const app = document.getElementById('app');
@@ -90,10 +93,20 @@ app.appendChild(credit);
 // ─── Роуты ───
 
 router.register('menu', (el) => {
-  const menuData = meData
-    ? { username: meData.username, balance: meData.balance, pvpRating: meData.pvp_rating }
-    : null;
-  renderMenu(el, router, menuData);
+  renderMenu(
+    el,
+    router,
+    meData
+      ? {
+          username: meData.username,
+          balance: meData.balance,
+          pvpRating: meData.pvp_rating,
+          badges: meData.badges ?? [],
+          customTitle: meData.custom_title ?? null,
+          plusTier: meData.plus_tier,
+        }
+      : null,
+  );
   updateBottomNav('menu');
 });
 
@@ -152,6 +165,26 @@ router.register('terminal', (el) => {
   updateBottomNav(null);
 });
 
+// ─── Экран чужого профиля ───
+
+let currentPlayerUsername: string | null = null;
+
+router.register('player', async (el) => {
+  if (!currentPlayerUsername) {
+    el.innerHTML = `
+      <div class="empty-state">
+        <iconify-icon icon="lucide:user-x" width="48" height="48"></iconify-icon>
+        <div class="empty-text">Игрок не выбран</div>
+      </div>
+    `;
+    return;
+  }
+  await renderPlayer(el, currentPlayerUsername, () => {
+    void router.navigate('menu');
+  });
+  updateBottomNav(null);
+});
+
 // ─── Заглушки ───
 
 router.register('ref', (el) => {
@@ -203,10 +236,35 @@ router.register('plus', (el) => {
 
     // ─── Запуск polling уведомлений ───
     startNotificationPolling(30000);
+
+    // ─── Если есть сохранённый выбор игрока — открыть его ───
+    if (pendingPlayerUsername) {
+      currentPlayerUsername = pendingPlayerUsername;
+      pendingPlayerUsername = null;
+      await router.navigate('player');
+      return;
+    }
   }
 
   await router.navigate('menu');
 })();
+
+// ─── Глобальная функция для поиска ───
+
+let pendingPlayerUsername: string | null = null;
+
+export function openPlayerProfile(username: string): void {
+  currentPlayerUsername = username;
+  if (meData) {
+    void router.navigate('player');
+  } else {
+    // ждём auth
+    pendingPlayerUsername = username;
+  }
+}
+
+// Экспорт для header.ts
+(window as unknown as { __vm_open_player?: (u: string) => void }).__vm_open_player = openPlayerProfile;
 
 const originalNavigate = router.navigate.bind(router);
 router.navigate = async (name) => {
