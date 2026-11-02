@@ -1664,3 +1664,132 @@
   color: var(--text-mute);
   font-size: 13px;
   }
+/* ═══ PLAYER PROFILE (v2.0) ═══ */
+
+.profile-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24px 20px 20px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 6%, transparent) 0%,
+    transparent 100%
+  );
+  border-bottom: 1px solid var(--line);
+}
+
+.profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--bg-2);
+  border: 2px solid var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-head);
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.profile-username-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.profile-username {
+  font-family: var(--font-head);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.profile-badges {
+  display: flex;
+  gap: 4px;
+}
+
+.profile-clan {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  padding: 3px 10px;
+  border-radius: 6px;
+  margin-top: 4px;
+}
+
+/* ─── Статы ─── */
+
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--line);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 12px;
+}
+
+.profile-stat {
+  background: var(--bg);
+  padding: 16px 8px;
+  text-align: center;
+}
+
+.profile-stat-value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.profile-stat-value.gold { color: var(--gold); }
+.profile-stat-value.blue { color: var(--blue); }
+
+.profile-stat-label {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--text-mute);
+  text-transform: uppercase;
+}
+
+/* ─── Действия ─── */
+
+.profile-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+
+.profile-actions .btn {
+  padding: 12px;
+  font-size: 12px;
+}
+
+/* ─── Витрина ─── */
+
+.profile-showcase-title {
+  font-family: var(--font-head);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  padding: 8px 16px;
+}
+
+.profile-showcase {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 0 16px 16px;
+  }
