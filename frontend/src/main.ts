@@ -71,7 +71,10 @@ if (window.Telegram?.WebApp) {
   window.Telegram.WebApp.expand();
 }
 
+// ─── Состояние ───
 let meData: MeData | null = null;
+let currentPlayerUsername: string | null = null;
+let pendingPlayerUsername: string | null = null;
 
 const screenContainer = document.createElement('div');
 screenContainer.className = 'app-screen-container';
@@ -167,8 +170,6 @@ router.register('terminal', (el) => {
 
 // ─── Экран чужого профиля ───
 
-let currentPlayerUsername: string | null = null;
-
 router.register('player', async (el) => {
   if (!currentPlayerUsername) {
     el.innerHTML = `
@@ -206,6 +207,19 @@ router.register('plus', (el) => {
     </div>
   `;
 });
+
+// ─── Глобальная функция для поиска ───
+
+export function openPlayerProfile(username: string): void {
+  currentPlayerUsername = username;
+  if (meData) {
+    void router.navigate('player');
+  } else {
+    pendingPlayerUsername = username;
+  }
+}
+
+(window as unknown as { __vm_open_player?: (u: string) => void }).__vm_open_player = openPlayerProfile;
 
 // ─── Auth ───
 
@@ -249,25 +263,8 @@ router.register('plus', (el) => {
   await router.navigate('menu');
 })();
 
-// ─── Глобальная функция для поиска ───
-
-let pendingPlayerUsername: string | null = null;
-
-export function openPlayerProfile(username: string): void {
-  currentPlayerUsername = username;
-  if (meData) {
-    void router.navigate('player');
-  } else {
-    // ждём auth
-    pendingPlayerUsername = username;
-  }
-}
-
-// Экспорт для header.ts
-(window as unknown as { __vm_open_player?: (u: string) => void }).__vm_open_player = openPlayerProfile;
-
 const originalNavigate = router.navigate.bind(router);
 router.navigate = async (name) => {
   await originalNavigate(name);
   updateBottomNav(name);
-}; 
+};
