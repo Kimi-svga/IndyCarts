@@ -1978,3 +1978,35 @@ async def send_custom_push(payload: PushRequest, user: User = Depends(get_curren
         await notify_many(session, list(users), "broadcast", payload.title, payload.text, payload.icon, "blue", payload.btn_action)
         await session.commit()
     return {"ok": True, "sent": len(users)}
+# ═════════════════════════════════════════════
+# PUBLIC USER SEARCH (v2.0)
+# ═════════════════════════════════════════════
+
+@router.get("/users/search")
+async def search_users_public(
+    query: str,
+    user: User = Depends(get_current_user),
+):
+    """Публичный поиск игроков. Возвращает только безопасные поля."""
+    q = query.strip().lstrip("@").lower()
+    if len(q) < 2:
+        return []
+
+    async with AsyncSessionLocal() as session:
+        users = (await session.execute(
+            select(User)
+            .where(User.username_normalized.ilike(f"%{q}%"))
+            .limit(10)
+        )).scalars().all()
+
+    return [
+        {
+            "username": u.username,
+            "telegram_id": u.telegram_id,
+            "pvp_rating": u.pvp_rating,
+            "plus_tier": u.plus_tier,
+            "daily_streak": u.daily_streak,
+        }
+        for u in users
+    ]
+
