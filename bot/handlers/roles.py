@@ -129,7 +129,7 @@ async def cb_list(query: CallbackQuery) -> None:
     text = "👑 <b>Команда Indy Carts</b>\n\n"
 
     if owner_users:
-        text += "<b>Владельцы:</b>\n"
+        text += "<b>Владельцы (из конфига):</b>\n"
         for u in owner_users:
             text += f"👑 @{u.username}\n"
         text += "\n"
@@ -139,13 +139,13 @@ async def cb_list(query: CallbackQuery) -> None:
         by_role.setdefault(role_obj.role, []).append(user.username)
 
     if not by_role:
-        text += "<i>Команда пуста</i>\n"
+        text += "<i>Команда пуста (в базе)</i>\n"
     else:
-        for rc in ["admin", "moderator", "helper", "support"]:
+        for rc in ["owner", "admin", "moderator", "helper", "support"]:  # Добавлен owner
             users = by_role.get(rc, [])
             if users:
-                emoji = ROLE_EMOJI.get(rc, "•")
-                text += f"<b>{ROLE_NAMES[rc]}:</b>\n"
+                emoji = ROLE_EMOJI.get(rc, "👑" if rc == "owner" else "•")
+                text += f"<b>{ROLE_NAMES.get(rc, rc).capitalize()}:</b>\n"
                 for u in users:
                     text += f"{emoji} @{u}\n"
                 text += "\n"
@@ -192,7 +192,6 @@ async def cmd_hire(message: Message) -> None:
             await message.answer(f"❌ @{target} не найден")
             return
 
-        # Кто назначает — из БД (не telegram_id!)
         mod_user = (await session.execute(
             select(User).where(User.telegram_id == message.from_user.id)
         )).scalar_one_or_none()
@@ -310,7 +309,7 @@ async def cmd_admins(message: Message) -> None:
     text = "👑 <b>Команда Indy Carts</b>\n\n"
 
     if owner_users:
-        text += "<b>Владельцы:</b>\n"
+        text += "<b>Владельцы (из конфига):</b>\n"
         for u in owner_users:
             text += f"👑 @{u.username}\n"
         text += "\n"
@@ -319,11 +318,12 @@ async def cmd_admins(message: Message) -> None:
     for role_obj, user in rows:
         by_role.setdefault(role_obj.role, []).append(user.username)
 
-    for rc in ["admin", "moderator", "helper", "support"]:
+    # Теперь owner выводится наравне с остальными
+    for rc in ["owner", "admin", "moderator", "helper", "support"]:
         users = by_role.get(rc, [])
         if users:
-            emoji = ROLE_EMOJI.get(rc, "•")
-            text += f"<b>{ROLE_NAMES[rc]}:</b>\n"
+            emoji = ROLE_EMOJI.get(rc, "👑" if rc == "owner" else "•")
+            text += f"<b>{ROLE_NAMES.get(rc, rc).capitalize()}:</b>\n"
             for u in users:
                 text += f"{emoji} @{u}\n"
             text += "\n"
@@ -357,7 +357,7 @@ async def cmd_adminrole(message: Message) -> None:
         await message.answer(f"👤 @{user.username} — не админ")
         return
 
-    emoji = ROLE_EMOJI.get(role.role, "•")
+    emoji = ROLE_EMOJI.get(role.role, "👑" if role.role == "owner" else "•")
     text = (
         f"👤 <b>@{user.username}</b>\n\n"
         f"{emoji} Роль: <b>{ROLE_NAMES.get(role.role, role.role)}</b>\n"
@@ -366,4 +366,4 @@ async def cmd_adminrole(message: Message) -> None:
     if role.notes:
         text += f"📝 Заметки: {role.notes}\n"
 
-    await message.answer(text, parse_mode="HTML") 
+    await message.answer(text, parse_mode="HTML")
