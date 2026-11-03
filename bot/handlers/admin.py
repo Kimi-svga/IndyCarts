@@ -21,7 +21,7 @@ from core.constants import (
     CEILING_MULTIPLIER, FLOOR_MULTIPLIER,
     RARITIES, RARITY_EMOJI, RARITY_NAMES,
 )
-from db.models import Card, PromoCode, PvpReward, Reward, User
+from db.models import Card, PromoCode, PvpReward, Reward, User, AdminRole
 from db.session import AsyncSessionLocal
 
 router = Router()
@@ -56,15 +56,19 @@ async def cmd_admin(message: Message) -> None:
     is_allowed = uid in settings.OWNER_IDS or uid in settings.ADMIN_IDS
 
     if not is_allowed:
-        from db.models import AdminRole
         async with AsyncSessionLocal() as session:
             user = (await session.execute(
                 select(User).where(User.telegram_id == uid)
             )).scalar_one_or_none()
+            
             if user is not None:
                 role = (await session.execute(
-                    select(AdminRole).where(AdminRole.user_id == user.id)
+                    select(AdminRole).where(
+                        AdminRole.user_id == user.id,
+                        AdminRole.is_active == True  # Проверяем, что роль активна
+                    )
                 )).scalar_one_or_none()
+                
                 if role is not None:
                     is_allowed = True
 
@@ -92,7 +96,7 @@ async def cb_edit_cards_redirect(query: CallbackQuery) -> None:
 
 
 # ─────────────────────────────────────────────
-# СОЗДАНИЕ КАРТЫ (FSM — оставлено)
+# СОЗДАНИЕ КАРТЫ (FSM)
 # ─────────────────────────────────────────────
 
 @router.callback_query(AdminMenu.filter(F.action == "add_card"))
@@ -604,4 +608,4 @@ async def cmd_setpvpreward(message: Message) -> None:
         f"✅ PvP-награда для топ-{position}:\n"
         f"💰 {money} монет\n"
         f"🎴 {attempts} попыток{card_text}"
-    )
+    ) 
