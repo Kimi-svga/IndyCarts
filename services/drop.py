@@ -1,10 +1,10 @@
 """Дроп карт с учётом редкости, веса, лимита тиража и кланового бонуса."""
 
 import random
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Tuple
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.constants import DROP_CHANCES, IW_CHANCE
@@ -15,23 +15,36 @@ logger = setup_logger()
 
 BONUS_RARITIES = ("legendary", "limited", "season")
 
+# Сколько раз пробуем перероллить редкость, если в пуле нет карт
+RARITY_REROLL_ATTEMPTS = 3
+
 
 class Drop:
     @staticmethod
-    def roll_rarity(drop_bonus: float = 0.0) -> str:
+    def roll_rarity(drop_bonus: float = 0.0, night_bonus: bool = False) -> str:
         weights = dict(DROP_CHANCES)
+
+        # Мягкий ночной бафф: legendary-вес ×1.5, а не "50% принудительно"
+        if night_bonus:
+            weights["legendary"] = weights.get("legendary", 0) * 1.5
+
+        # Клановый бонус: перекладываем часть веса basic/rare/epic в редкие
         if drop_bonus > 0:
             shift_pool = 0.0
             for r in ("basic", "rare", "epic"):
-                take = weights[r] * drop_bonus * 0.3
+                take = weights[r] * min(drop_bonus, 0.5) * 0.3
                 weights[r] = max(0.0, weights[r] - take)
                 shift_pool += take
-            if weights["legendary"] + weights["limited"] + weights["season"] > 0:
-                total_rare = weights["legendary"] + weights["limited"] + weights["season"]
+            total_rare = sum(weights[r] for r in ("legendary", "limited", "season"))
+            if total_rare > 0 and shift_pool > 0:
                 for r in ("legendary", "limited", "season"):
                     weights[r] += shift_pool * (weights[r] / total_rare)
-        rarities = list(weights.keys())
-        chances = list(weights.values())
+
+        # Убираем нулевые веса, чтобы random.choices не падал
+        items = [(r, w) for r, w in weights.items() if w > 0]
+        if not items:
+            return "basic"
+        rarities, chances = zip(*items)
         return random.choices(rarities, weights=chances, k=1)[0]
 
     @staticmethod
@@ -50,43 +63,35 @@ class Drop:
     @staticmethod
     def is_night() -> bool:
         # МСК = UTC+3
-        now = datetime.utcnow() + timedelta(hours=3)
+        now = datetime.now(timezone.utc) + timedelta(hours=3)
         return 0 <= now.hour < 6
 
     @staticmethod
     async def get_random_card(session: AsyncSession, rarity: str) -> Optional[Card]:
+        """Честная взвешенная выборка внутри редкости.
+
+        drop_weight — это относительный вес: 100 = стандарт,
+        50 = вдвое реже, 200 = вдвое чаще.
+        """
         stmt = (
-            select(Card)
+            select(Card.id, Card.drop_weight)
             .where(
                 Card.rarity == rarity,
                 Card.is_active == True,
                 Card.in_drop == True,
                 (Card.max_supply == None) | (Card.issued < Card.max_supply),
             )
-            .order_by(func.pow(func.random(), 1.0 / Card.drop_weight).desc())
-            .limit(1)
             .with_for_update()
         )
-        card = (await session.execute(stmt)).scalar_one_or_none()
-        if card and card.max_supply is not None:
-            card.issued += 1
-            await session.flush()
-        return card
+        rows = (await session.execute(stmt)).all()
+        if not rows:
+            return None
 
-    @staticmethod
-    async def get_any_card(session: AsyncSession) -> Optional[Card]:
-        stmt = (
-            select(Card)
-            .where(
-                Card.is_active == True,
-                Card.in_drop == True,
-                (Card.max_supply == None) | (Card.issued < Card.max_supply),
-            )
-            .order_by(func.random())
-            .limit(1)
-            .with_for_update()
-        )
-        card = (await session.execute(stmt)).scalar_one_or_none()
+        ids = [r.id for r in rows]
+        weights = [max(float(r.drop_weight or 0), 0.0001) for r in rows]
+        chosen_id = random.choices(ids, weights=weights, k=1)[0]
+
+        card = await session.get(Card, chosen_id, with_for_update=True)
         if card and card.max_supply is not None:
             card.issued += 1
             await session.flush()
@@ -96,20 +101,27 @@ class Drop:
     async def drop_card_with_bonus(
         session: AsyncSession, drop_bonus: float = 0.0
     ) -> Tuple[Optional[Card], bool, bool]:
-        rarity = Drop.roll_rarity(drop_bonus)
-        
-        # Ночной бафф
-        if Drop.is_night() and random.random() < 0.5:
-            rarity = "legendary"
+        night = Drop.is_night()
+
+        # Пробуем до RARITY_REROLL_ATTEMPTS раз: если в выпавшей редкости
+        # нет доступных карт — переролливаем редкость, а не падаем
+        # в равномерный рандом по всем картам.
+        card = None
+        for _ in range(RARITY_REROLL_ATTEMPTS):
+            rarity = Drop.roll_rarity(drop_bonus, night_bonus=night)
+            card = await Drop.get_random_card(session, rarity)
+            if card is not None:
+                break
+
+        if card is None:
+            logger.warning("Дроп: не удалось найти карту после рероллов")
+            return None, False, False
 
         is_iw = Drop.roll_iw()
-        card = await Drop.get_random_card(session, rarity)
-        if card is None:
-            card = await Drop.get_any_card(session)
 
         is_cursed = False
         if Drop.is_halloween() and random.random() < 0.15:
             is_cursed = True
-            logger.info(f"👻 Выпала проклятая карта: {card.name if card else 'None'}")
+            logger.info(f"👻 Выпала проклятая карта: {card.name}")
 
         return card, is_iw, is_cursed
