@@ -1,11 +1,11 @@
-"""Выдача кастомных титулов (Owner-only)."""
+"""Выдача кастомных титулов."""
 
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 from sqlalchemy import select
 
-from core.config import settings
+from bot.utils.decorators import check_role
 from core.logger import setup_logger
 from db.models import User
 from db.session import AsyncSessionLocal
@@ -18,8 +18,9 @@ logger = setup_logger()
 async def cmd_set_title(message: Message) -> None:
     """Выдает кастомный титул игроку. Формат: /settitle @username Текст титула"""
     
-    # Проверка, что команду вызывает владелец
-    if message.from_user.id not in settings.OWNER_IDS:
+    # Проверка: вызывать может любой админ (или владелец)
+    if not await check_role(message.from_user.id, "admin"):
+        await message.answer("⛔ Нет доступа")
         return
 
     # Разбиваем сообщение на 3 части: команда, ник, текст титула (с пробелами)
@@ -65,4 +66,4 @@ async def cmd_set_title(message: Message) -> None:
             parse_mode="HTML"
         )
     except Exception as e:
-        logger.error(f"Не удалось отправить уведомление о титуле: {e}") 
+        logger.error(f"Не удалось отправить уведомление о титуле: {e}")
