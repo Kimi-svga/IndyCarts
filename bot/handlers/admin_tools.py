@@ -1,4 +1,4 @@
-"""Инструменты игрока: /userinfo, /setbalance, /givecard, /resetpvp."""
+"""Инструменты игрока: /userinfo, /setbalance, /addmoney, /givecard, /resetpvp, /setgems, /resetgems."""
 
 from aiogram import Router
 from aiogram.filters import Command
@@ -81,9 +81,11 @@ async def cmd_userinfo(message: Message) -> None:
     await message.answer(text, parse_mode="HTML")
 
 
+# ═══ БАЛАНС ═══
+
 @router.message(Command("setbalance"))
 async def cmd_setbalance(message: Message) -> None:
-    if not await _require(message, "owner"):
+    if not await _require(message, "admin"):  # <--- ИЗМЕНЕНО НА ADMIN
         return
 
     parts = message.text.split()
@@ -120,7 +122,7 @@ async def cmd_setbalance(message: Message) -> None:
 
 @router.message(Command("addmoney"))
 async def cmd_addmoney(message: Message) -> None:
-    if not await _require(message, "owner"):
+    if not await _require(message, "admin"):  # <--- ИЗМЕНЕНО НА ADMIN
         return
 
     parts = message.text.split()
@@ -154,6 +156,84 @@ async def cmd_addmoney(message: Message) -> None:
         parse_mode="HTML",
     )
 
+
+# ═══ ПРЕМИУМ-ВАЛЮТА (IG) ═══
+
+@router.message(Command("setgems"))
+async def cmd_setgems(message: Message) -> None:
+    if not await _require(message, "admin"):
+        return
+
+    parts = message.text.split()
+    if len(parts) < 3:
+        await message.answer(
+            "Формат: <code>/setgems @username количество</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    target = parts[1].lstrip("@").lower()
+    try:
+        amount = int(parts[2])
+    except ValueError:
+        await message.answer("❌ Количество должно быть числом")
+        return
+
+    async with AsyncSessionLocal() as session:
+        user = (await session.execute(
+            select(User).where(User.username_normalized == target)
+        )).scalar_one_or_none()
+
+        if user is None:
+            await message.answer(f"❌ Игрок @{target} не найден")
+            return
+
+        old_gems = getattr(user, 'indy_gems', 0)
+        user.indy_gems = amount
+        await session.commit()
+
+        await message.answer(
+            f"✅ <b>Indy Gems обновлены</b>\n\n"
+            f"👤 @{user.username}\n"
+            f"💎 Было: {old_gems}\n"
+            f"💎 Стало: <b>{amount}</b>",
+            parse_mode="HTML"
+        )
+
+
+@router.message(Command("resetgems"))
+async def cmd_resetgems(message: Message) -> None:
+    if not await _require(message, "admin"):
+        return
+
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.answer("Формат: <code>/resetgems @username</code>", parse_mode="HTML")
+        return
+
+    target = parts[1].lstrip("@").lower()
+
+    async with AsyncSessionLocal() as session:
+        user = (await session.execute(
+            select(User).where(User.username_normalized == target)
+        )).scalar_one_or_none()
+
+        if user is None:
+            await message.answer(f"❌ Игрок @{target} не найден")
+            return
+
+        user.indy_gems = 0
+        await session.commit()
+
+        await message.answer(
+            f"✅ <b>Indy Gems сброшены</b>\n\n"
+            f"👤 @{user.username}\n"
+            f"💎 Баланс: <b>0</b>",
+            parse_mode="HTML"
+        )
+
+
+# ═══ КАРТЫ И PVP ═══
 
 @router.message(Command("givecard"))
 async def cmd_givecard(message: Message) -> None:
