@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from bot.keyboards.admin import AdminMenu, get_admin_menu
 from bot.keyboards.admin_cards import ACard
 from bot.keyboards.main import get_back_menu
-from bot.utils.decorators import require_admin
+from bot.utils.decorators import require_admin, check_role
 from bot.utils.stable import safe_answer, safe_render
 from core.config import settings
 from core.constants import (
@@ -52,27 +52,9 @@ class Broadcast(StatesGroup):
 
 @router.message(Command("admin"))
 async def cmd_admin(message: Message) -> None:
-    uid = message.from_user.id
-    is_allowed = uid in settings.OWNER_IDS or uid in settings.ADMIN_IDS
-
-    if not is_allowed:
-        async with AsyncSessionLocal() as session:
-            user = (await session.execute(
-                select(User).where(User.telegram_id == uid)
-            )).scalar_one_or_none()
-            
-            if user is not None:
-                role = (await session.execute(
-                    select(AdminRole).where(
-                        AdminRole.user_id == user.id,
-                        AdminRole.is_active == True  # Проверяем, что роль активна
-                    )
-                )).scalar_one_or_none()
-                
-                if role is not None:
-                    is_allowed = True
-
-    if not is_allowed:
+    # Проверяем роль через БД и конфиг (доступ получат все админы)
+    if not await check_role(message.from_user.id, "admin"):
+        await message.answer("⛔ Нет доступа")
         return
 
     await message.answer(
@@ -96,7 +78,7 @@ async def cb_edit_cards_redirect(query: CallbackQuery) -> None:
 
 
 # ─────────────────────────────────────────────
-# СОЗДАНИЕ КАРТЫ (FSM)
+# СОЗДАНИЕ КАРТЫ (FSM — оставлено)
 # ─────────────────────────────────────────────
 
 @router.callback_query(AdminMenu.filter(F.action == "add_card"))
@@ -232,14 +214,14 @@ async def ac_skip(message: Message, state: FSMContext) -> None:
 
 @router.message(Command("importcards"))
 async def cmd_import(message: Message) -> None:
-    if message.from_user.id not in settings.OWNER_IDS and message.from_user.id not in settings.ADMIN_IDS:
+    if not await check_role(message.from_user.id, "admin"):
         return
     await message.answer("📦 Отправь JSON-файл с картами")
 
 
 @router.message(F.document)
 async def handle_import(message: Message) -> None:
-    if message.from_user.id not in settings.OWNER_IDS and message.from_user.id not in settings.ADMIN_IDS:
+    if not await check_role(message.from_user.id, "admin"):
         return
 
     if not message.document or not message.document.file_name:
@@ -427,57 +409,12 @@ async def cb_stats(query: CallbackQuery) -> None:
 
 
 # ─────────────────────────────────────────────
-# БАЛАНС
-# ─────────────────────────────────────────────
-
-@router.message(Command("setbalance"))
-async def cmd_setbalance(message: Message) -> None:
-    if message.from_user.id not in settings.OWNER_IDS:
-        return
-
-    parts = message.text.split()
-    if len(parts) < 3:
-        await message.answer(
-            "Использование: <code>/setbalance @username сумма</code>",
-            parse_mode="HTML",
-        )
-        return
-
-    username = parts[1].lstrip("@").lower()
-
-    try:
-        amount = int(parts[2])
-    except ValueError:
-        await message.answer("❌ Сумма — число")
-        return
-
-    async with AsyncSessionLocal() as session:
-        user = (await session.execute(
-            select(User).where(User.username_normalized == username)
-        )).scalar_one_or_none()
-
-        if user is None:
-            await message.answer("❌ Игрок не найден")
-            return
-
-        old = user.balance
-        user.balance = amount
-        await session.commit()
-        name = user.username
-
-    await message.answer(
-        f"✅ <b>Баланс изменён</b>\n\n@{name}: {old} → <b>{amount}</b>",
-        parse_mode="HTML",
-    )
-
-
-# ─────────────────────────────────────────────
 # СОБЫТИЕ НА БИРЖЕ
 # ─────────────────────────────────────────────
 
 @router.message(Command("event"))
 async def cmd_event(message: Message) -> None:
-    if message.from_user.id not in settings.OWNER_IDS:
+    if not await check_role(message.from_user.id, "admin"):
         return
 
     parts = message.text.split()
@@ -528,7 +465,7 @@ async def cb_rewards(query: CallbackQuery) -> None:
 
 @router.message(Command("setreward"))
 async def cmd_setreward(message: Message) -> None:
-    if message.from_user.id not in settings.OWNER_IDS and message.from_user.id not in settings.ADMIN_IDS:
+    if not await check_role(message.from_user.id, "admin"):
         return
 
     parts = message.text.split()
@@ -567,7 +504,7 @@ async def cmd_setreward(message: Message) -> None:
 
 @router.message(Command("setpvpreward"))
 async def cmd_setpvpreward(message: Message) -> None:
-    if message.from_user.id not in settings.OWNER_IDS:
+    if not await check_role(message.from_user.id, "admin"):
         return
 
     parts = message.text.split()
@@ -608,4 +545,4 @@ async def cmd_setpvpreward(message: Message) -> None:
         f"✅ PvP-награда для топ-{position}:\n"
         f"💰 {money} монет\n"
         f"🎴 {attempts} попыток{card_text}"
-    ) 
+    )
