@@ -10,7 +10,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy import select
 
 from bot.keyboards.main import MainMenu, get_back_menu
-from bot.utils.decorators import require_owner
+from bot.utils.decorators import require_owner, check_role
 from bot.utils.stable import safe_answer, safe_render
 from core.config import settings
 from core.constants import ROLE_EMOJI, ROLE_LEVELS, ROLE_NAMES
@@ -42,22 +42,27 @@ def _panel_keyboard() -> InlineKeyboardBuilder:
 async def _show_panel(query: CallbackQuery) -> None:
     await safe_render(
         query,
-        "👑 <b>Панель владельца</b>\n\n"
+        "👑 <b>Панель управления</b>\n\n"
         "Управление командой и ролями.",
         _panel_keyboard().as_markup(),
     )
 
 
 @router.callback_query(MainMenu.filter(F.action == "admin_panel"))
-@require_owner
 async def cb_admin_panel(query: CallbackQuery) -> None:
+    # Разрешаем доступ админам
+    if not await check_role(query.from_user.id, "admin"):
+        await safe_answer(query, "⛔ Нет доступа", show_alert=True)
+        return
     await safe_answer(query)
     await _show_panel(query)
 
 
 @router.callback_query(RolesMenu.filter(F.action == "back"))
-@require_owner
 async def cb_back_to_panel(query: CallbackQuery) -> None:
+    if not await check_role(query.from_user.id, "admin"):
+        await safe_answer(query, "⛔ Нет доступа", show_alert=True)
+        return
     await safe_answer(query)
     await _show_panel(query)
 
@@ -65,8 +70,10 @@ async def cb_back_to_panel(query: CallbackQuery) -> None:
 # ─── Найм ───
 
 @router.callback_query(RolesMenu.filter(F.action == "hire"))
-@require_owner
 async def cb_hire(query: CallbackQuery) -> None:
+    if not await check_role(query.from_user.id, "admin"):
+        await safe_answer(query, "⛔ Нет доступа", show_alert=True)
+        return
     await safe_answer(query)
 
     b = InlineKeyboardBuilder()
@@ -87,8 +94,10 @@ async def cb_hire(query: CallbackQuery) -> None:
 
 
 @router.callback_query(RolesMenu.filter(F.action.startswith("role_")))
-@require_owner
 async def cb_hire_role(query: CallbackQuery, callback_data: RolesMenu) -> None:
+    if not await check_role(query.from_user.id, "admin"):
+        await safe_answer(query, "⛔ Нет доступа", show_alert=True)
+        return
     await safe_answer(query)
     role = callback_data.action.replace("role_", "")
 
@@ -110,8 +119,10 @@ async def cb_hire_role(query: CallbackQuery, callback_data: RolesMenu) -> None:
 # ─── Список ───
 
 @router.callback_query(RolesMenu.filter(F.action == "list"))
-@require_owner
 async def cb_list(query: CallbackQuery) -> None:
+    if not await check_role(query.from_user.id, "admin"):
+        await safe_answer(query, "⛔ Нет доступа", show_alert=True)
+        return
     await safe_answer(query)
 
     async with AsyncSessionLocal() as session:
@@ -141,7 +152,7 @@ async def cb_list(query: CallbackQuery) -> None:
     if not by_role:
         text += "<i>Команда пуста (в базе)</i>\n"
     else:
-        for rc in ["owner", "admin", "moderator", "helper", "support"]:  # Добавлен owner
+        for rc in ["owner", "admin", "moderator", "helper", "support"]:
             users = by_role.get(rc, [])
             if users:
                 emoji = ROLE_EMOJI.get(rc, "👑" if rc == "owner" else "•")
@@ -163,8 +174,9 @@ async def cb_list(query: CallbackQuery) -> None:
 
 @router.message(Command("hire"))
 async def cmd_hire(message: Message) -> None:
-    if message.from_user.id not in settings.OWNER_IDS:
-        await message.answer("⛔ Только владелец")
+    # Вместо проверки OWNER_IDS используем check_role
+    if not await check_role(message.from_user.id, "admin"):
+        await message.answer("⛔ Нет доступа")
         return
 
     parts = message.text.split()
@@ -181,6 +193,11 @@ async def cmd_hire(message: Message) -> None:
 
     if role not in ROLE_LEVELS or role == "owner":
         await message.answer("❌ Неверная роль")
+        return
+
+    # Запрещаем админам назначать других админов (только владелец)
+    if role == "admin" and message.from_user.id not in settings.OWNER_IDS:
+        await message.answer("⛔ Только владелец может назначать администраторов")
         return
 
     async with AsyncSessionLocal() as session:
@@ -240,8 +257,8 @@ async def cmd_hire(message: Message) -> None:
 
 @router.message(Command("fire"))
 async def cmd_fire(message: Message) -> None:
-    if message.from_user.id not in settings.OWNER_IDS:
-        await message.answer("⛔ Только владелец")
+    if not await check_role(message.from_user.id, "admin"):
+        await message.answer("⛔ Нет доступа")
         return
 
     parts = message.text.split()
@@ -268,6 +285,16 @@ async def cmd_fire(message: Message) -> None:
             await message.answer(f"❌ @{target} не админ")
             return
 
+        # Запрещаем снимать владельца
+        if user.telegram_id in settings.OWNER_IDS:
+            await message.answer("⛔ Нельзя снять владельца")
+            return
+
+        # Запрещаем админам снимать других админов (только владелец)
+        if role.role == "admin" and message.from_user.id not in settings.OWNER_IDS:
+            await message.answer("⛔ Только владелец может снимать администраторов")
+            return
+
         role.is_active = False
         role.updated_at = datetime.utcnow()
 
@@ -289,7 +316,6 @@ async def cmd_fire(message: Message) -> None:
 
 @router.message(Command("admins"))
 async def cmd_admins(message: Message) -> None:
-    from bot.utils.decorators import check_role
     if not await check_role(message.from_user.id, "moderator"):
         await message.answer("⛔ Нет доступа")
         return
@@ -318,7 +344,6 @@ async def cmd_admins(message: Message) -> None:
     for role_obj, user in rows:
         by_role.setdefault(role_obj.role, []).append(user.username)
 
-    # Теперь owner выводится наравне с остальными
     for rc in ["owner", "admin", "moderator", "helper", "support"]:
         users = by_role.get(rc, [])
         if users:
